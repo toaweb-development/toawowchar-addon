@@ -4,6 +4,16 @@ The **toawowchar** addon for World of Warcraft: Forever, its tests and the scrip
 
 Developer commands and the release steps are in [README.md](README.md); this file holds the rules. Standards come from the toa-rules MCP (`git`, `versioning`, `dependencies`, `security`, `deployment-strategy`).
 
+**Every change to the addon follows [docs/wow-addon-rules.md](docs/wow-addon-rules.md)**, the owner's rules for WoW addons. Where this repository does something else on purpose, it is listed under «Deviations» below; anything not listed there follows the rules document.
+
+## Deviations
+
+From `docs/wow-addon-rules.md`, decided by the owner:
+
+- **The export is plain JSON behind `WOWCHAR:3:`, with no LibSerialize or LibDeflate.** wowchar decodes the text on its server (`app/server/utils/addon-export.ts`), so the addon writes a format that wowchar owns and can read without a Lua library (see «What lives where»).
+- **Releases use our own deterministic zip pipeline (`scripts/build-zip.py`, `release.yml`), not BigWigs Packager.** wowchar pins the release zip by size and sha256, so the bytes must be reproducible on any machine and in any time zone (see «Release»).
+- **The addon is one file (`toawowchar/toawowchar.lua`) until phase B splits it.** No locale tables yet either; both wait for phase B.
+
 ## What lives where
 
 | Here (toawowchar-addon) | In wowchar (toawowchar) |

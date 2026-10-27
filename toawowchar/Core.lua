@@ -347,6 +347,7 @@ end
 --   part.Call(fn, ...)   runs fn(...) in pcall; its results, or nothing when off or on error
 --   part.Wrap(fn)        a function that does part.Call(fn, ...) (event and click scripts)
 --   part.OnFail(fn)      run once (in pcall) when the part turns off: unregister, hide, clear
+--                        (at once when it is already off)
 --   part.IsOff(), part.SayOff()
 
 local ERROR_MAX = 200
@@ -355,9 +356,11 @@ local ERROR_MAX = 200
 -- escape code reaches the chat frame), at most ERROR_MAX bytes cut on a character boundary.
 local function ErrorLine(err)
     local text
-    if type(err) == "string" then
+    if IsSecret(err) then
+        return L["UNKNOWN_ERROR"]
+    elseif type(err) == "string" then
         text = err
-    elseif not IsSecret(err) then
+    else
         local ok, s = pcall(tostring, err)
         text = ok and type(s) == "string" and s or nil
     end
@@ -393,15 +396,21 @@ local function Part(name, label)
     local off = false
     local onFail = {}
 
+    -- Nothing in here may raise: the clean-up runs first, each step in its own pcall, then
+    -- the chat line (a chat frame or an error value that raises costs only the line).
     local function Fail(err)
         if off then
             return
         end
         off = true
-        Say(string.format(L["PART_OFF"], label, ErrorLine(err)))
         for _, fn in ipairs(onFail) do
             pcall(fn)
         end
+        local ok, line = pcall(ErrorLine, err)
+        if not ok or type(line) ~= "string" then
+            line = L["UNKNOWN_ERROR"]
+        end
+        pcall(Say, string.format(L["PART_OFF"], label, line))
     end
 
     -- pcall's results without its first: the function's own results, or nothing on error.
@@ -430,7 +439,11 @@ local function Part(name, label)
     end
 
     function part.OnFail(fn)
-        onFail[#onFail + 1] = fn
+        if off then
+            pcall(fn)
+        else
+            onFail[#onFail + 1] = fn
+        end
     end
 
     function part.IsOff()
@@ -439,7 +452,7 @@ local function Part(name, label)
 
     -- The chat line for a player who asks for a part that is off (/wowchar guide).
     function part.SayOff()
-        Say(string.format(L["PART_IS_OFF"], label))
+        pcall(Say, string.format(L["PART_IS_OFF"], label))
     end
 
     parts[name] = part

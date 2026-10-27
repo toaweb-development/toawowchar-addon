@@ -210,25 +210,26 @@ describe('a guide or waypoint that hits an error: one chat line, that part off u
   const f = (label) => get('failsafe', label)
 
   it('at its start: one line with the error, then no handler runs; /wowchar guide says it is off', () => {
-    expect(f('start-error')).toEqual([[off('guide', 'test/lua/guide-test.lua:445: route data broken on purpose')], 0, true, true])
-    expect(f('command-when-off')).toEqual([[off('guide', 'test/lua/guide-test.lua:445: route data broken on purpose'), IS_OFF], true])
+    expect(f('start-error')).toEqual([[off('guide', 'route data broken on purpose')], 0, true, true, true])
+    expect(f('command-when-off')).toEqual([[off('guide', 'route data broken on purpose'), IS_OFF], true])
   })
 
   it('in an event handler while shown: the window hides, the guide\'s waypoint is cleared, its events stop', () => {
-    const [before, lines, shown, calls, cleared, handled, count] = f('event-error')
+    const [before, lines, shown, calls, cleared, handled, count, deaf] = f('event-error')
+    expect(deaf).toBe(true)
     expect(before).toEqual([true, true])
-    expect(lines).toEqual([off('guide', 'test/lua/guide-test.lua:464: settle broke')])
+    expect(lines).toEqual([off('guide', 'settle broke')])
     expect([shown, calls, cleared, handled, count]).toEqual([false, [['clear']], true, 0, 1])
   })
 
   it('in a button and in /wowchar guide: the same, and the command still answers', () => {
-    expect(f('button-error')).toEqual([[off('guide', 'test/lua/guide-test.lua:479: skip broke')], false, true])
-    expect(f('command-error')).toEqual([true, [off('guide', 'test/lua/guide-test.lua:487: toggle broke'), IS_OFF]])
+    expect(f('button-error')).toEqual([[off('guide', 'skip broke')], false, true])
+    expect(f('command-error')).toEqual([true, [off('guide', 'toggle broke'), IS_OFF]])
   })
 
   it('in the waypoint: only the waypoint turns off (its marker cleared); the guide goes on without it', () => {
     const [[lines, calls], step, shown, later, guideOff, count] = f('waypoint-error')
-    expect(lines).toEqual([off('waypoint', 'test/lua/guide-test.lua:495: super track broke')])
+    expect(lines).toEqual([off('waypoint', 'super track broke')])
     expect(calls).toEqual([['set', 1429, 421, 659], ['clear']])
     expect([step, shown, later, guideOff, count]).toEqual([3, true, [], false, 1])
   })
@@ -245,6 +246,35 @@ describe('a guide or waypoint that hits an error: one chat line, that part off u
 
   it('a new session has the guide again, shown as it was saved', () => {
     expect(f('after-reload')).toEqual([false, true, true, 0])
+  })
+})
+
+describe('the guard itself lets nothing escape', () => {
+  const p = (label) => get('part', label)
+  const line = (name, message) => `|cff8B7CFFtoawowchar:|r the ${name} hit an error and is turned off for this session: ${message}`
+
+  it('error values that are not text: a table, a table whose tostring raises, nil, blanks', () => {
+    expect(p('table')[2].startsWith(line('t', 'table: '))).toBe(true)
+    expect(p('table').slice(0, 2)).toEqual([true, true])
+    expect(p('bad-tostring')).toEqual([true, true, line('b', 'unknown error')])
+    expect(p('nil')).toEqual([true, true, line('n', 'nil')])
+    expect(p('empty')).toEqual([true, true, line('e', 'unknown error')])
+  })
+
+  it('a cut never splits a character', () => {
+    expect(p('utf8')).toEqual([line('u', 'x'.repeat(199) + '...')])
+  })
+
+  it('a hook that raises does not stop the next; a hook added when the part is off runs at once', () => {
+    expect(p('hooks')).toEqual(['second', 'late'])
+  })
+
+  it('a chat frame that raises costs only the line: the call returns and the clean-up ran', () => {
+    expect(p('chat-raises')).toEqual([true, true, true])
+  })
+
+  it('a window that fails half made is hidden and the guide is off', () => {
+    expect(p('half-window')).toEqual([true, true, false, true])
   })
 })
 

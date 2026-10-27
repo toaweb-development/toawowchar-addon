@@ -103,10 +103,11 @@ Waypoint.Clear = part.Wrap(Clear)
 
 -- Turned off by an error: the marker this addon set is cleared if it can still be.
 part.OnFail(function()
-    if IsMine() then
-        C_Map.ClearUserWaypoint()
-    end
+    local ok, own = pcall(IsMine)
     mine = nil
+    if ok and own then
+        pcall(C_Map.ClearUserWaypoint)
+    end
 end)
 
 -- For the tests: the waypoint this addon thinks it set.

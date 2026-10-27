@@ -439,10 +439,18 @@ elseif scenario == "failsafe" then
     end
     local calls = 0
     local function counting() calls = calls + 1 end
+    -- The guide's event frame (the only one that hears QUEST_ACCEPTED), and whether it still hears anything.
+    local function guideFrame()
+        for _, f in ipairs(Env.frames) do
+            if f.events and f.events.QUEST_ACCEPTED then return f end
+        end
+    end
+    local function deaf(f) return f ~= nil and next(f.events) == nil end
 
     -- 1. at the start: route data that raises on every read
     load()
-    Env.ns.RouteData = setmetatable({}, { __index = function() error("route data broken on purpose") end })
+    local events1 = guideFrame()
+    Env.ns.RouteData = setmetatable({}, { __index = function() error("route data broken on purpose", 0) end })
     login()
     local afterStart = guideLines()
     Env.ns.Guide.Settle = counting
@@ -451,7 +459,7 @@ elseif scenario == "failsafe" then
     Env.fire("QUEST_LOG_UPDATE")
     Env.fire("PLAYER_LEVEL_UP", 2)
     Env.fire("PLAYER_ENTERING_WORLD", false, true)
-    emit("start-error", { afterStart, calls, Env.ns.Guide.part.IsOff(), Env.ns.Waypoint.Mine() == nil })
+    emit("start-error", { afterStart, calls, Env.ns.Guide.part.IsOff(), Env.ns.Waypoint.Mine() == nil, deaf(events1) })
     Env.slash("/wowchar guide")
     emit("command-when-off", { guideLines(), Env.ns.GuideWindow.Frame() == nil })
 
@@ -461,7 +469,8 @@ elseif scenario == "failsafe" then
     Env.slash("/wowchar guide")
     local before = { shown(), Env.ns.Waypoint.Mine() ~= nil }
     game.calls = {}
-    Env.ns.Guide.Settle = function() error("settle broke") end
+    local events2 = guideFrame()
+    Env.ns.Guide.Settle = function() error("settle broke", 0) end
     game.log[101] = { objectives = {} }
     Env.fire("QUEST_ACCEPTED", 101)
     local line = guideLines()
@@ -470,13 +479,13 @@ elseif scenario == "failsafe" then
     Env.fire("QUEST_ACCEPTED", 101)
     Env.fire("QUEST_TURNED_IN", 101)
     Env.fire("ZONE_CHANGED_NEW_AREA")
-    emit("event-error", { before, line, shown(), game.calls, game.waypoint == nil, calls, #guideLines() })
+    emit("event-error", { before, line, shown(), game.calls, game.waypoint == nil, calls, #guideLines(), deaf(events2) })
 
     -- 3. a button
     fresh()
     login()
     Env.slash("/wowchar guide")
-    Env.ns.Guide.Skip = function() error("skip broke") end
+    Env.ns.Guide.Skip = function() error("skip broke", 0) end
     button("Skip").scripts.OnClick(button("Skip"))
     button("Back").scripts.OnClick(button("Back"))
     emit("button-error", { guideLines(), shown(), Env.ns.Guide.part.IsOff() })
@@ -484,7 +493,7 @@ elseif scenario == "failsafe" then
     -- 4. /wowchar guide itself (an error in Toggle); the command and the export go on
     fresh()
     login()
-    Env.ns.Guide.Toggle = function() error("toggle broke") end
+    Env.ns.Guide.Toggle = function() error("toggle broke", 0) end
     local answered = Env.slash("/wowchar guide")
     Env.slash("/wowchar guide")
     emit("command-error", { answered, guideLines() })
@@ -492,7 +501,7 @@ elseif scenario == "failsafe" then
     -- 5. the waypoint alone: the guide goes on without the marker
     fresh()
     local superTrack = C_SuperTrack
-    C_SuperTrack = setmetatable({}, { __index = function() error("super track broke") end })
+    C_SuperTrack = setmetatable({}, { __index = function() error("super track broke", 0) end })
     login()
     Env.slash("/wowchar guide")
     local first = { guideLines(), game.calls }
@@ -517,6 +526,52 @@ elseif scenario == "failsafe" then
     load()
     login()
     emit("after-reload", { Env.ns.Guide.part.IsOff(), shown(), Env.ns.Waypoint.Mine() ~= nil, #guideLines() })
+
+elseif scenario == "part" then
+    -- The guard itself (Core.lua, Part): nothing that fails inside it may escape it.
+    load()
+    local Part = Env.ns.Part
+    local function lastLine() return Env.chat[#Env.chat] end
+    local function failWith(name, value)
+        local p = Part(name, name)
+        local ok = pcall(p.Call, function() error(value, 0) end)
+        return { ok, p.IsOff(), lastLine() }
+    end
+    emit("table", failWith("t", {}))
+    emit("bad-tostring", failWith("b", setmetatable({}, { __tostring = function() error("no") end })))
+    emit("nil", failWith("n", nil))
+    emit("empty", failWith("e", "   "))
+    -- a two-byte character across byte 200: cut before it
+    local p = Part("u", "u")
+    p.Call(function() error(string.rep("x", 199) .. "\195\169" .. "tail", 0) end)
+    emit("utf8", { lastLine() })
+    -- a raising hook does not stop the next; a hook added when off runs at once
+    local q = Part("h", "h")
+    local ran = {}
+    q.OnFail(function() error("hook broke") end)
+    q.OnFail(function() ran[#ran + 1] = "second" end)
+    q.Call(error, "x")
+    q.OnFail(function() ran[#ran + 1] = "late" end)
+    emit("hooks", ran)
+    -- a chat frame that raises: Call still returns, the hooks still ran
+    local chat = DEFAULT_CHAT_FRAME
+    DEFAULT_CHAT_FRAME = { AddMessage = function() error("chat broke") end }
+    local r = Part("c", "c")
+    local cleaned = false
+    r.OnFail(function() cleaned = true end)
+    local ok = pcall(r.Call, error, "x")
+    DEFAULT_CHAT_FRAME = chat
+    emit("chat-raises", { ok, cleaned, r.IsOff() })
+    -- the window fails half made (its buttons' template is missing): hidden, and the guide off
+    Env.relog()
+    toawowcharDB = nil
+    Env.missingTemplates.UIPanelButtonTemplate = true
+    load()
+    login()
+    local answered = Env.slash("/wowchar guide")
+    Env.missingTemplates.UIPanelButtonTemplate = nil
+    local f = Env.ns.GuideWindow.Frame()
+    emit("half-window", { answered, f ~= nil, f ~= nil and f.shown, Env.ns.Guide.part.IsOff() })
 
 elseif scenario == "migration" then
     -- dbVersion 1 (0.4.x: realms at the top) becomes 2; the cache survives; a newer file is left alone.

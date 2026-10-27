@@ -4,8 +4,9 @@
 --
 -- Saved (toawowcharDB.guide, Core.lua): `shown` and `point` (where it was dragged to).
 -- Combat: no frame is made, shown, hidden, moved or written to while InCombatLockdown() is
--- true. What would change is remembered and done once on PLAYER_REGEN_ENABLED; a drag does
--- not start in combat. The waypoint is not a frame and follows the step at once.
+-- true, except the hide when the guide turns off after an error (a plain frame, not
+-- protected). What would change is remembered and done once on PLAYER_REGEN_ENABLED; a drag
+-- does not start in combat. The waypoint is not a frame and follows the step at once.
 -- Errors: every way in (the guide's events, /wowchar guide, the buttons, the drag) runs through
 -- the guide's part; the waypoint is a part of its own (Waypoint.lua).
 --
@@ -96,6 +97,10 @@ local function Create()
     if not ok or type(f) ~= "table" then
         f = CreateFrame("Frame", nil, UIParent)
     end
+    -- Hidden and known at once: if a later line raises, the guide's clean-up finds it and the
+    -- half-made window is not left on the screen.
+    f:Hide()
+    frame = f
     f:SetSize(WIDTH, HEIGHT)
     f:SetFrameStrata("MEDIUM")
     f:SetMovable(true)

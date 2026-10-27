@@ -54,7 +54,8 @@
 --   WorldMapFrame (Blizzard_WorldMap/Blizzard_WorldMap.xml:67, not load on demand) with
 --     HookScript (SimpleScriptRegionAPIDocumentation.lua:365) and GetMapID
 --     (Blizzard_MapCanvas/Blizzard_MapCanvas.lua:77).
---   Position: C_Map.GetBestMapForUnit (MapDocumentation.lua:49), C_Map.GetPlayerMapPosition
+--   Position: C_Map.GetBestMapForUnit (MapDocumentation.lua:49), C_Map.GetMapInfo (:312,
+--     parentMapID :703, for the maps around the player), C_Map.GetPlayerMapPosition
 --     (:437, a Vector2D; GetXY Blizzard_SharedXML/Vector2D.lua:77), IsInInstance
 --     (InstanceDocumentation.lua:170).
 --   Units: UnitGUID (UnitDocumentation.lua:1241; may be secret), UnitName (:2489).

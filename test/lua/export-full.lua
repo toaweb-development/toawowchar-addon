@@ -67,13 +67,30 @@ toawowcharDB = {
 --   guide-start-error  the route data raises on every read: the guide fails at its start
 --   guide-event-error  the guide starts on its real route, then fails in an event handler
 local mode = arg and arg[1]
+--   observed-off       observations are stored, the section is off (as shipped): the same text
+--   observed           the section on: the same text plus sections.observed
+--   collect-error      the section on and the collection raising: observed is missing, the
+--                      rest is the same text, the guide starts
+local observedModes = { ["observed-off"] = true, observed = true, ["collect-error"] = true }
+if observedModes[mode] then
+    Env.ns.DB()
+    local o = toawowcharDB.observed
+    o.quests[501] = { title = "The Skyward Path", level = 12, giver = 70001, start = { 2400, 432, 568 },
+        objectives = { { "Windscale slain: 0/8", 8 } }, points = { { { 2400, 500, 500 }, { 2400, 600, 550 } } },
+        xp = 1350, money = 425, first = 20740, last = 20741, build = "70532" }
+    o.npcs[70001] = { name = "Ranger Aelith", map = 2400, x = 432, y = 568, first = 20740, last = 20740, build = "70532" }
+    Env.ns.EXPORT_OBSERVED = mode ~= "observed-off"
+    if mode == "collect-error" then
+        Env.ns.Collect.Section = function() error("section broken on purpose", 0) end
+    end
+end
 if mode == "guide-start-error" then
     Env.ns.RouteData = setmetatable({}, { __index = function() error("route data broken on purpose") end })
 elseif mode == "guide-event-error" then
     Env.ns.Guide.Settle = function() error("settle broken on purpose") end
 end
 local guideKey
-if mode then
+if mode == "guide-start-error" or mode == "guide-event-error" or mode == "collect-error" then
     Env.fire("PLAYER_ENTERING_WORLD", true, false)
     guideKey = Env.ns.Guide.state.route and Env.ns.Guide.state.key or false
     Env.slash("/wowchar guide")
@@ -90,5 +107,5 @@ Env.fire("TAXIMAP_OPENED")
 print(Env.run())
 if mode then
     print(Env.ns.Serialize(Env.chat))
-    print(Env.ns.Serialize({ guideKey, Env.ns.Guide.part.IsOff() }))
+    print(Env.ns.Serialize({ guideKey or false, Env.ns.Guide.part.IsOff(), Env.ns.Collect.part.IsOff() }))
 end

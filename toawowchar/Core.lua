@@ -652,6 +652,10 @@ end
 
 -- What the other files read from the namespace.
 ns.DB_VERSION = DB_VERSION
+-- The export's «observed» section (Collect.lua, Export.lua): off until wowchar's decoder accepts
+-- it (Tor's decision, 2026-10-27); its format is written down in wowchar's
+-- docs/addon-export-format-3.md. Turning it on is this one line.
+ns.EXPORT_OBSERVED = false
 ns.DB = DB
 ns.ADDON_VERSION = ADDON_VERSION
 ns.FORMAT_VERSION = FORMAT_VERSION

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from './lib/suite.mjs'
 import { expect } from './lib/expect.mjs'
@@ -110,5 +111,44 @@ describe('collection: an error turns off only the collection', () => {
     expect(lines).toEqual(['|cff8B7CFFtoawowchar:|r the quest data collection hit an error and is turned off for this session: spread broke'])
     expect([collectOff, guideOff]).toEqual([true, false])
     expect(get('error', 'after')).toEqual([true])
+  })
+})
+
+describe('the export: the «observed» section', () => {
+  const PREFIX = 'WOWCHAR:3:'
+  const FIXTURE = readFileSync(new URL('./fixtures/export-full.txt', import.meta.url), 'utf8').replace(/\n$/, '')
+  const run = (mode) => {
+    const r = spawnSync('lua', ['test/lua/export-full.lua', mode], { cwd: ROOT, encoding: 'utf8' })
+    if (r.error) throw r.error
+    expect(r.stderr).toBe('')
+    expect(r.status).toBe(0)
+    const [text, chat, state] = r.stdout.replace(/\n$/, '').split('\n')
+    return { text, chat: JSON.parse(chat), state: JSON.parse(state) }
+  }
+
+  it('as shipped (off): with observations stored, the text is test/fixtures/export-full.txt byte for byte', () => {
+    expect(run('observed-off').text).toBe(FIXTURE)
+  })
+
+  it('on: the same text with sections.observed added, and nothing else changed (bytes and values)', () => {
+    const { text } = run('observed')
+    const j = JSON.parse(text.slice(PREFIX.length))
+    const observed = j.sections.observed
+    expect(observed.source).toBe('live')
+    expect(observed.npcs).toEqual([{ build: '70532', first: 20740, id: 70001, last: 20740, map: 2400, name: 'Ranger Aelith', x: 432, y: 568 }])
+    expect(observed.quests[0].points).toEqual([[1, 2400, 500, 500], [1, 2400, 600, 550]])
+    expect(text.replace(`"observed":${JSON.stringify(observed)},`, '')).toBe(FIXTURE)
+    delete j.sections.observed
+    expect(j).toEqual(JSON.parse(FIXTURE.slice(PREFIX.length)))
+  })
+
+  it('on, with the collection raising: observed is missing, the rest unchanged, collection off, the guide on', () => {
+    const { text, chat, state } = run('collect-error')
+    const j = JSON.parse(text.slice(PREFIX.length))
+    expect(j.sections.observed).toEqual({ source: 'missing', why: 'not_available' })
+    delete j.sections.observed
+    expect(j).toEqual(JSON.parse(FIXTURE.slice(PREFIX.length)))
+    expect(chat.filter(l => l.includes('hit an error'))).toEqual(['|cff8B7CFFtoawowchar:|r the quest data collection hit an error and is turned off for this session: section broken on purpose'])
+    expect(state).toEqual(['dwarf-gnome', false, true])
   })
 })

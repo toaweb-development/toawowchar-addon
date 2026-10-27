@@ -367,7 +367,7 @@ describe('the export and the cache do not depend on the guide', () => {
   ])('%s: /wowchar gives the same text as test/fixtures/export-full.txt (%s)', (mode, key) => {
     const { text, chat, state } = run(mode)
     expect(text).toBe(FIXTURE)
-    expect(state).toEqual([key, true])
+    expect(state).toEqual([key, true, false]) // the guide off, the collection still on
     const hit = chat.filter(l => l.includes('hit an error'))
     expect(hit).toHaveLength(1)
     expect(hit[0]).toContain('the guide hit an error and is turned off for this session: ')

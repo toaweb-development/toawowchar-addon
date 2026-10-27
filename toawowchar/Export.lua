@@ -1378,6 +1378,15 @@ local function BuildPayload()
         classSpells = Section(Read.ClassSpells, professionNames),
     }
 
+    -- Quest data seen in play (Collect.lua): built only when EXPORT_OBSERVED is on, which it is
+    -- not until wowchar accepts the section (its decoder refuses an unknown one). Through the
+    -- collection's part: an error there makes the section missing and turns off only collection.
+    if ns.EXPORT_OBSERVED then
+        local collect = ns.Collect
+        local section = collect and collect.part.Call(collect.Section)
+        sections.observed = type(section) == "table" and section or Missing("not_available")
+    end
+
     -- The player's numbers: kept in the cache when read, taken from it when the game gives none now.
     if sections.player.source == "live" then
         if stamp then
@@ -1482,7 +1491,14 @@ local function Run()
     trace[1] = { "", #text, BodyLength(text) }
 
     local dropped = {}
-    for _, name in ipairs(DROP_ORDER) do
+    local order = DROP_ORDER
+    if payload.sections.observed then
+        order = { "observed" } -- the observations are the first to go, then the others
+        for _, name in ipairs(DROP_ORDER) do
+            order[#order + 1] = name
+        end
+    end
+    for _, name in ipairs(order) do
         if Fits(text) then
             break
         end

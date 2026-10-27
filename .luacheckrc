@@ -17,7 +17,7 @@ globals = {
 read_globals = {
     -- frames, chat and the UI
     "ChatFontNormal", "CreateColor", "CreateFrame", "DEFAULT_CHAT_FRAME", "GameTooltip",
-    "InCombatLockdown", "UIParent", "UISpecialFrames", "WorldMapFrame",
+    "InCombatLockdown", "Settings", "UIParent", "UISpecialFrames", "WorldMapFrame",
     -- WoW's Lua aliases
     "time", "tinsert",
     -- the C_ namespaces

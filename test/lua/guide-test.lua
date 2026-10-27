@@ -392,6 +392,15 @@ elseif scenario == "window" then
     f.scripts.OnDragStop(f)
     emit("point", toawowcharDB.guide.point)
     local saved = toawowcharDB
+    -- «Show the guide at login» off (the default): hidden after a relog, and no waypoint
+    Env.relog()
+    toawowcharDB = saved
+    game.calls = {}
+    load()
+    login()
+    emit("login-default", { Env.ns.GuideWindow.Frame() == nil, toawowcharDB.guide.shown, #game.calls })
+    -- on: shown at its saved place
+    toawowcharDB.settings.guideAtLogin = true
     Env.relog()
     toawowcharDB = saved
     load()
@@ -581,7 +590,8 @@ elseif scenario == "failsafe" then
     button("Back").scripts.OnClick(button("Back"))
     emit("message", guideLines())
 
-    -- 7. a new session (/reload) has the guide again, shown as it was saved
+    -- 7. a new session (/reload) has the guide again (shown at login when the setting says so)
+    toawowcharDB.settings.guideAtLogin = true
     Env.relog()
     load()
     login()

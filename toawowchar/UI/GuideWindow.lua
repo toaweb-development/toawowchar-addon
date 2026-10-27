@@ -656,9 +656,17 @@ function GuideWindow.Toggle()
     end
 end
 
--- Login and /reload: as it was saved (hidden unless it was shown).
+-- Login and /reload: shown when «Show the guide at login» is on (UI/Settings.lua), else hidden
+-- until /wowchar guide. BeforeLogin runs before the guide finds its step, so a hidden guide
+-- never sets its waypoint; Restore after it.
+function GuideWindow.BeforeLogin()
+    if DB().settings.guideAtLogin ~= true then
+        Saved().shown = false
+    end
+end
+
 function GuideWindow.Restore()
-    if Saved().shown == true then
+    if DB().settings.guideAtLogin == true then
         GuideWindow.Show()
     end
 end

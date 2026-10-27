@@ -804,6 +804,13 @@ local function Command(message)
         end
         return
     end
+    -- /wowchar settings opens the settings panel (UI/Settings.lua, a part of its own).
+    if word == "settings" then
+        if ns.SettingsPanel then
+            ns.SettingsPanel.Open()
+        end
+        return
+    end
     -- In combat the game hides values from addons: wait until it ends.
     if InCombat() then
         session.pendingOpen = true

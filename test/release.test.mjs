@@ -21,8 +21,8 @@ const ZIP_FILES = JSON.parse(spawnSync('python3', ['-I', '-c',
 // container (header fields, order, stamp) shows as a changed hash, not as a quiet change of every release.
 // The synthetic tree has one small file for each entry of ZIP_FILES, so a new file in the zip changes
 // these two numbers too (read the diff of build-zip.py first: the container itself must not change).
-const SYNTHETIC_SIZE = 2184
-const SYNTHETIC_SHA256 = '959ba088eaf4bd125cd3a89eb6f302d3a71c523d6c2bc19a7c4869dc3a2f260d'
+const SYNTHETIC_SIZE = 2356
+const SYNTHETIC_SHA256 = 'c65ccfecd2a627acb2ef0d628a8d265c99fef52b5a012be721afb499c1c8e1b7'
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 

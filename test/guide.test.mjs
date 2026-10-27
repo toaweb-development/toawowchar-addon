@@ -155,7 +155,11 @@ describe('the guide window', () => {
     expect(p.following[0][1]).toBe('|cff9d9d9dWolves || Boars · Marshal Dughan|r')
   })
 
-  it('saves where it was dragged and is there, shown, after a relog; a damaged place falls back to the default', () => {
+  it('«Show the guide at login» off (the default): hidden after a relog, and no waypoint is set', () => {
+    expect(get('window', 'login-default')).toEqual([true, false, 0])
+  })
+
+  it('saves where it was dragged and is there, shown at login when the setting is on; a damaged place falls back to the default', () => {
     expect(get('window', 'point')).toEqual(['TOPLEFT', 'BOTTOMLEFT', 120, 641])
     expect(get('window', 'relog')).toEqual([true, 'TOPLEFT', 'BOTTOMLEFT', 120, 641])
     expect(get('window', 'damaged-point')).toEqual(['RIGHT'])
@@ -316,7 +320,7 @@ describe('a guide or waypoint that hits an error: one chat line, that part off u
     expect(message.endsWith('x...')).toBe(true)
   })
 
-  it('a new session has the guide again, shown as it was saved', () => {
+  it('a new session has the guide again (shown at login with the setting on)', () => {
     expect(f('after-reload')).toEqual([false, true, true, 0])
   })
 })

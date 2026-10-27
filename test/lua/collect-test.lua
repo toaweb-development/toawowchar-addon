@@ -353,3 +353,51 @@ elseif scenario == "error" then
     offer(1102, "After", 70401, "Anyone")
     emit("after", { O().quests[1102] == nil })
 end
+
+if scenario == "settings" then
+    -- The settings panel: registered at login, opened by /wowchar settings, two switches and
+    -- the stored counts.
+    local registered, opened = {}, {}
+    Settings = {
+        RegisterCanvasLayoutCategory = function(frame, name)
+            local c = { frame = frame, name = name }
+            function c.GetID() return 77 end
+            return c
+        end,
+        RegisterAddOnCategory = function(c) registered[#registered + 1] = c.name end,
+        OpenToCategory = function(id) opened[#opened + 1] = id end,
+    }
+    load()
+    Env.slash("/wowchar settings")
+    emit("before-login", { Env.chat[#Env.chat], #opened })
+    Env.fire("PLAYER_LOGIN")
+    local panel, w, category = Env.ns.SettingsPanel.Frame()
+    emit("registered", { registered, category.frame == panel })
+    Env.slash("/wowchar settings")
+    emit("opened", opened)
+    -- the switches show the defaults; the line counts what is stored
+    offer(1201, "Counted", 70501, "Clerk")
+    accept(1201, "Counted", { { "Ledgers: 0/2", 0, 2 } })
+    at(0.2, 0.7)
+    count(1201, 1, 1)
+    panel:Show()
+    emit("panel", { w.collect.Text.text, w.collect:GetChecked(), w.guide.Text.text, w.guide:GetChecked(), w.stored.text })
+    -- clicking writes the saved settings
+    w.collect:SetChecked(false)
+    w.collect.scripts.OnClick(w.collect)
+    w.guide:SetChecked(true)
+    w.guide.scripts.OnClick(w.guide)
+    emit("clicked", { toawowcharDB.settings.collect, toawowcharDB.settings.guideAtLogin })
+    -- in combat: it opens when combat ends
+    Env.combat = true
+    Env.slash("/wowchar settings")
+    emit("in-combat", { Env.chat[#Env.chat], #opened })
+    Env.combat = false
+    Env.fire("PLAYER_REGEN_ENABLED")
+    emit("after-combat", { #opened })
+    -- an error in the panel: only the panel is off; /wowchar still exports
+    Settings.OpenToCategory = function() error("settings broke", 0) end
+    Env.slash("/wowchar settings")
+    local text = Env.run()
+    emit("error", { Env.chat[#Env.chat], Env.ns.SettingsPanel.part.IsOff(), Env.ns.Collect.part.IsOff(), text:sub(1, 10) })
+end

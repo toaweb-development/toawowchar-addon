@@ -27,6 +27,15 @@ L["PART_IS_OFF"] = "the %s is turned off for this session after an error. /reloa
 L["PART_GUIDE"] = "guide"
 L["PART_WAYPOINT"] = "waypoint"
 L["PART_COLLECT"] = "quest data collection"
+L["PART_SETTINGS"] = "settings panel"
+
+-- The settings panel (UI/Settings.lua).
+L["SETTINGS_TITLE"] = "toawowchar"
+L["SETTINGS_COLLECT"] = "Collect quest data"
+L["SETTINGS_GUIDE_AT_LOGIN"] = "Show the guide at login"
+L["SETTINGS_STORED"] = "Stored: %d quests, %d NPCs, %d points" -- quests, NPCs, points
+L["SETTINGS_AFTER_COMBAT"] = "in combat. The settings open when combat ends."
+L["SETTINGS_NONE"] = "this client has no settings panel for addons."
 L["UNKNOWN_ERROR"] = "unknown error"
 
 -- The export window.

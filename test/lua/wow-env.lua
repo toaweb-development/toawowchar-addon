@@ -161,6 +161,8 @@ frameMethods.RegisterEvent = function(self, event)
 end
 frameMethods.UnregisterAllEvents = function(self) self.events = {} end
 frameMethods.SetNormalAtlas = function(self, atlas) self.atlas = atlas end
+frameMethods.SetChecked = function(self, v) self.checked = v and true or false end
+frameMethods.GetChecked = function(self) return self.checked == true end
 frameMethods.SetValue = function(self, v) self.value = v end
 
 local frameMeta = {
@@ -183,7 +185,7 @@ end
 
 local KNOWN_TEMPLATES = {
     BasicFrameTemplateWithInset = true, InputScrollFrameTemplate = true, UIPanelButtonTemplate = true,
-    BackdropTemplate = true, UIPanelScrollFrameTemplate = true,
+    BackdropTemplate = true, UIPanelScrollFrameTemplate = true, UICheckButtonTemplate = true,
 }
 
 function CreateFrame(kind, name, parent, template)
@@ -196,6 +198,8 @@ function CreateFrame(kind, name, parent, template)
     if template == "BasicFrameTemplateWithInset" then
         f.TitleText = newFontString(f)
         f.InsetBg = newTexture(f)
+    elseif template == "UICheckButtonTemplate" then
+        f.Text = newFontString(f)
     elseif template == "InputScrollFrameTemplate" then
         f.EditBox = newFrame("EditBox", name and (name .. "EditBox") or nil, f)
         f.CharCount = newFontString(f)

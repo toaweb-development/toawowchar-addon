@@ -27,6 +27,7 @@ ZIP_FILES = (
     "README.md",
     "Serializer.lua",
     "UI/GuideWindow.lua",
+    "UI/Settings.lua",
     "UI/Window.lua",
     "Waypoint.lua",
     f"{FOLDER}.toc",

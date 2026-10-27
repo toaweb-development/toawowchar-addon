@@ -152,3 +152,34 @@ describe('the export: the «observed» section', () => {
     expect(state).toEqual(['dwarf-gnome', false, true])
   })
 })
+
+describe('the settings panel', () => {
+  const g = (label) => get('settings', label)
+  const LABEL = '|cff8B7CFFtoawowchar:|r '
+
+  it('is registered with the game\'s Settings at login (a canvas category, an addon category)', () => {
+    expect(g('before-login')).toEqual([`${LABEL}this client has no settings panel for addons.`, 0])
+    expect(g('registered')).toEqual([['toawowchar'], true])
+  })
+
+  it('/wowchar settings opens it', () => {
+    expect(g('opened')).toEqual([77])
+  })
+
+  it('«Collect quest data» on and «Show the guide at login» off by default, and the stored counts', () => {
+    expect(g('panel')).toEqual(['Collect quest data', true, 'Show the guide at login', false, 'Stored: 1 quests, 1 NPCs, 1 points'])
+  })
+
+  it('a click writes the saved setting', () => {
+    expect(g('clicked')).toEqual([false, true])
+  })
+
+  it('in combat it says so and opens when combat ends', () => {
+    expect(g('in-combat')).toEqual([`${LABEL}in combat. The settings open when combat ends.`, 1])
+    expect(g('after-combat')).toEqual([2])
+  })
+
+  it('an error turns off only the panel; the export still works', () => {
+    expect(g('error')).toEqual([`${LABEL}the settings panel hit an error and is turned off for this session: settings broke`, true, false, 'WOWCHAR:3:'])
+  })
+})

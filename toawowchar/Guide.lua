@@ -699,6 +699,9 @@ end
 
 function handlers.PLAYER_ENTERING_WORLD()
     if not state.started then
+        if ns.GuideWindow then
+            ns.GuideWindow.BeforeLogin()
+        end
         Guide.Start()
         if ns.GuideWindow then
             ns.GuideWindow.Restore()

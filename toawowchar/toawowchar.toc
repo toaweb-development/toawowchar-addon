@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: toawowchar
-## Notes: Type /wowchar to get a text you can paste at wowchar (My characters, or a character's BiS page). Sends nothing anywhere.
+## Notes: Type /wowchar to get a text you can paste at wowchar (My characters, or a character's BiS page); /wowchar guide for a leveling guide. Sends nothing anywhere.
 ## SavedVariables: toawowcharDB
-## Version: 0.4.1
+## Version: 0.5.0
 ## Author: toaweb
 Locales\enUS.lua
 Core.lua

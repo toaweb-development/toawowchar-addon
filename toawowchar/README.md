@@ -134,6 +134,8 @@ In wowchar, bank items and warband bank items count as obtained only when the te
 
 ## What is new
 
+**0.5.0.** A leveling guide: `/wowchar guide` shows the next steps of wowchar's leveling route for your race (levels 1 to 40), with `/way` lines, «Back», «Skip» and «Hide», and puts the game's own waypoint on each step. The routes come with the addon. The saved file gets a version (`dbVersion` 2); a 0.4.x file is moved over without losing anything. The export text is the same as in 0.4.1.
+
 **0.4.1.** The first release made from the addon's own repository, `toaweb/toawowchar-addon`. The code is the same as 0.4.0; one wrong comment about the Legacy cache was corrected.
 
 **0.4.0.** The addon is renamed **toawowchar** (folder, TOC, SavedVariables `toawowcharDB`; no data is taken over from `WowcharExportDB`), and `/toawowchar` works like `/wowchar`. A snapshot of the equipped items, bags, completed quests, professions and gold/level/XP is kept current by game events (the level one second after a level-up). Format 3 (`WOWCHAR:3:`): completed quests, the quest log, recipes with reagents, reputation, money and XP, talents, Legacy, flight paths, the season's PvP rank and class spells, each with its source (read now, cache or missing with a reason). A SavedVariables cache of the bank, recipes, flight paths, Legacy and completed quests, and `/wowchar reset`. A new window with a checklist. The addon says one short line when it caches something. wowchar still reads formats 2 and 1.
@@ -142,6 +144,6 @@ The full history is in the [changelog](https://github.com/toaweb/toawowchar-addo
 
 ## Status
 
-Version 0.4.1. In a real Forever client (build 70450, addon 0.4.0) these were checked on 2026-10-22: SavedVariables are read back after `/reload`, the completed quests come back in full right after login, and the professions are read without the profession window. **Not yet tried in a real client:** the bank and the warband bank, and the recipes from the profession window; the flight map was not part of that check either. Earlier versions (0.1 and 0.2) made format 1 (`WOWCHAR:1:`, compressed and base64), which depended on a game function that was never checked on a real client; wowchar still accepts such a text, but the addon no longer makes it.
+Version 0.5.0. The leveling guide is new and not tested in a real client yet (see «The leveling guide»). In a real Forever client (build 70450, addon 0.4.0) these were checked on 2026-10-22: SavedVariables are read back after `/reload`, the completed quests come back in full right after login, and the professions are read without the profession window. **Not yet tried in a real client:** the bank and the warband bank, and the recipes from the profession window; the flight map was not part of that check either. Earlier versions (0.1 and 0.2) made format 1 (`WOWCHAR:1:`, compressed and base64), which depended on a game function that was never checked on a real client; wowchar still accepts such a text, but the addon no longer makes it.
 
 Source, bug reports and the text format's contract with wowchar: <https://github.com/toaweb/toawowchar-addon>.

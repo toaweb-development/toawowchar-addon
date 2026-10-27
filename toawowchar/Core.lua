@@ -1,4 +1,4 @@
--- toawowchar 0.4.1
+-- toawowchar 0.5.0
 --
 -- Type /wowchar (or /toawowchar, the same command) to open a window with a text
 -- string (who the character is, equipped items, bags, the bank and the warband
@@ -74,7 +74,7 @@ local addonName, ns = ...
 
 local L = ns.L
 
-local ADDON_VERSION = "0.4.1"
+local ADDON_VERSION = "0.5.0"
 local FORMAT_VERSION = 3
 local PREFIX = "WOWCHAR:" .. FORMAT_VERSION .. ":"
 -- The longest text the server takes (MAX_ENCODED_LENGTH in

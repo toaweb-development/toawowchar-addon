@@ -6,6 +6,32 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-27
+
+A leveling guide. The export text is unchanged (format 3, the same bytes as 0.4.1 for the same game).
+
+### Added
+- `/wowchar guide` shows or hides the leveling guide: a small movable window with the current step
+  of the character's route and the next two, each with a `/way` line (zone, coordinates, the level
+  the route expects), and the buttons «Back», «Skip» and «Hide». The route is the one of the
+  character's race; the two Skyborne routes say «unconfirmed start».
+- At login and `/reload` the guide goes to the first step whose quests are not all done. It moves on
+  by itself: accept steps on `QUEST_ACCEPTED`, objective steps when the objectives are done, turn-ins
+  on `QUEST_TURNED_IN`, travel steps on reaching the zone, grind steps on reaching the next step's level.
+- Each step puts the game's own user waypoint on its place and super-tracks it (the game's navigation
+  marker and edge arrow). Hiding the guide clears it, but only the waypoint the guide set.
+- The routes ship with the addon in `Data/Routes.lua`, written by `scripts/fetch-routes.py` from
+  wowchar's route API (eight starts, levels 1 to 40). Every map id in them is in the Forever client's
+  UiMap table.
+
+### Changed
+- The addon is split into files along the owner's addon rules (`docs/wow-addon-rules.md`): `Core.lua`,
+  `Serializer.lua`, `Export.lua`, `Cache.lua`, `UI/Window.lua` and the guide's files, sharing state
+  through the addon's namespace. Every text the player sees comes from `Locales/enUS.lua`.
+- The saved file has a version, `dbVersion` 2: the cache is under `realms`, the guide under `guide`.
+  A 0.4.x file is migrated the first time 0.5.0 loads it; a file from a newer version is left untouched.
+- In combat the guide's window does not change; it catches up when combat ends.
+
 ## [0.4.1] - 2026-10-22
 
 The first release made from this repository. The addon lived in `toaweb/toawowchar` until now; its
@@ -46,6 +72,7 @@ Released with wowchar 3.11.0 (see wowchar's changelog).
 ### Changed
 - The export is format 3 instead of format 2. wowchar still reads formats 1 and 2.
 
-[Unreleased]: https://github.com/toaweb/toawowchar-addon/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/toaweb/toawowchar-addon/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/toaweb/toawowchar-addon/releases/tag/v0.5.0
 [0.4.1]: https://github.com/toaweb/toawowchar-addon/releases/tag/v0.4.1
 [0.4.0]: https://github.com/toaweb/toawowchar/blob/main/CHANGELOG.md

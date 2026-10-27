@@ -286,6 +286,14 @@ function bump(dir, to, { text = '### Fixed\n- a change for the test\n', skip = [
 
 const gate = (dir, base = 'main') => py('check-bump.py', ['--root', dir, base])
 
+// The versions the gate tests use, from the repository's own version (the base of baseRepo()),
+// so the tests do not depend on which release is current.
+const BASE = /^## Version: (\S+)$/m.exec(readFileSync(join(ROOT, 'toawowchar/toawowchar.toc'), 'utf8'))[1]
+const [MAJOR, MINOR, PATCH] = BASE.split('.').map(Number)
+const NEXT = `${MAJOR}.${MINOR}.${PATCH + 1}`
+const LOWER = PATCH > 0 ? `${MAJOR}.${MINOR}.${PATCH - 1}` : `${MAJOR}.${MINOR - 1}.0`
+const escaped = v => v.replaceAll('.', '\\.')
+
 describe('scripts/check-bump.py', () => {
   it('passes when nothing changed, and says so', () => {
     const r = gate(baseRepo())
@@ -309,7 +317,7 @@ describe('scripts/check-bump.py', () => {
   it('passes when a zip file changed and the version is higher in all five places, with a CHANGELOG entry', () => {
     const dir = baseRepo()
     edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
-    bump(dir, '0.4.2')
+    bump(dir, NEXT)
     const r = gate(dir)
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
@@ -378,37 +386,37 @@ describe('scripts/check-bump.py', () => {
   ])('fails when the version is raised everywhere but %s', place => {
     const dir = baseRepo()
     edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
-    bump(dir, '0.4.2', { skip: [place] })
+    bump(dir, NEXT, { skip: [place] })
     const r = gate(dir)
     expect(r.status).toBe(1)
-    expect(r.stderr).toMatch(/is still 0\.4\.1: raise it/)
+    expect(r.stderr).toMatch(new RegExp(`is still ${escaped(BASE)}: raise it`))
   })
 
   it('fails when the version is lower than the base\'s, even though a zip file changed', () => {
     const dir = baseRepo()
     edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
-    bump(dir, '0.4.0')
+    bump(dir, LOWER)
     const r = gate(dir)
     expect(r.status).toBe(1)
-    expect(r.stderr).toContain("the TOC's ## Version is 0.4.0, lower than 0.4.1 at main")
-    expect(r.stderr).toContain('the newest CHANGELOG entry is 0.4.0, lower than 0.4.1 at main')
+    expect(r.stderr).toContain(`the TOC's ## Version is ${LOWER}, lower than ${BASE} at main`)
+    expect(r.stderr).toContain(`the newest CHANGELOG entry is ${LOWER}, lower than ${BASE} at main`)
   })
 
   it('fails when the version is lowered although no zip file changed otherwise', () => {
     const dir = baseRepo()
-    edit(dir, 'toawowchar/toawowchar.toc', s => s.replace(/^## Version: .*$/m, '## Version: 0.3.0'))
+    edit(dir, 'toawowchar/toawowchar.toc', s => s.replace(/^## Version: .*$/m, `## Version: ${LOWER}`))
     const r = gate(dir)
     expect(r.status).toBe(1)
-    expect(r.stderr).toContain("lower than 0.4.1 at main")
+    expect(r.stderr).toContain(`lower than ${BASE} at main`)
   })
 
-  it('compares numbers, not text: 0.4.10 is higher than 0.4.9', () => {
+  it('compares numbers, not text: X.Y.10 is higher than X.Y.9', () => {
     const dir = baseRepo()
-    bump(dir, '0.4.9')
-    git(dir, 'commit', '--quiet', '-am', 'base 0.4.9')
+    bump(dir, `${MAJOR}.${MINOR + 1}.9`)
+    git(dir, 'commit', '--quiet', '-am', 'base X.Y.9')
     git(dir, 'switch', '--quiet', '--create', 'next')
     edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
-    bump(dir, '0.4.10')
+    bump(dir, `${MAJOR}.${MINOR + 1}.10`)
     const r = gate(dir)
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
@@ -417,10 +425,10 @@ describe('scripts/check-bump.py', () => {
   it('fails when the new version has a CHANGELOG heading but no text', () => {
     const dir = baseRepo()
     edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
-    bump(dir, '0.4.2', { text: '' })
+    bump(dir, NEXT, { text: '' })
     const r = gate(dir)
     expect(r.status).toBe(1)
-    expect(r.stderr).toContain('CHANGELOG.md: the entry for 0.4.2 has no text')
+    expect(r.stderr).toContain(`CHANGELOG.md: the entry for ${NEXT} has no text`)
   })
 
   it('fails on a base that is not a commit, or that looks like an option', () => {

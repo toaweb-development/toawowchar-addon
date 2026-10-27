@@ -8,7 +8,7 @@
 -- characters» to add the character, or on the character's BiS page to mark the
 -- BiS items you already have as obtained. The addon sends nothing anywhere.
 --
--- What it saves (SavedVariables: toawowcharDB, a CACHE only): what the game
+-- What it saves (SavedVariables: toawowcharDB): a CACHE of what the game
 -- only lets it read while a window is open (the bank and the warband bank, the
 -- recipes of each profession, the flight paths), the Legacy tree and the
 -- completed quests. Game events also keep a copy of the equipped items, the
@@ -16,13 +16,16 @@
 -- current (the Snapshot in Cache.lua). Each cached part has the time it was read. The addon works
 -- exactly the same when nothing was saved or the client does not keep the file:
 -- the text is then made from what the game answers now, and the parts it could
--- not read say why. "/wowchar reset" clears this character's cache.
+-- not read say why. "/wowchar reset" clears this character's cache. Besides the cache: the
+-- guide's place, the settings, and the quest data the collection saw (Collect.lua, account-wide;
+-- "/wowchar reset" does not clear it).
 --
 -- Chat: the addon says one short line when it has cached something new (the
 -- bank, a profession's recipes, flight paths), one when /wowchar is typed in
 -- combat (the window then opens when combat ends) and one for "/wowchar reset".
--- It also says one line when the guide or the waypoint hits an error and turns off
--- (Part, below). It says nothing else; the snapshot of the equipped items, bags, completed
+-- It also says one line when a part (the guide, the waypoint, the collection, the settings
+-- panel) hits an error and turns off (Part, below), and one when /wowchar settings is typed
+-- in combat or the client has no settings panel. It says nothing else; the snapshot of the equipped items, bags, completed
 -- quests, professions and player numbers that game events keep current (see
 -- Snapshot) is silent.
 --

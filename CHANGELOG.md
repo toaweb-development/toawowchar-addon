@@ -29,9 +29,16 @@ A leveling guide. The export text is unchanged (format 3, the same bytes as 0.4.
 - The addon is split into files along the owner's addon rules (`docs/wow-addon-rules.md`): `Core.lua`,
   `Serializer.lua`, `Export.lua`, `Cache.lua`, `UI/Window.lua` and the guide's files, sharing state
   through the addon's namespace. Every text the player sees comes from `Locales/enUS.lua`.
-- The saved file has a version, `dbVersion` 2: the cache is under `realms`, the guide under `guide`.
+- The saved file has a version, `dbVersion` 3: the cache is under `realms`, the guide under `guide`,
+  the settings under `settings` and the quest data under `observed`.
   A 0.4.x file is migrated the first time 0.5.0 loads it; a file from a newer version is left untouched.
 - In combat the guide's window does not change; it catches up when combat ends.
+- Quest data collection: offers, accepts, where objectives count up (at most 20 places each,
+  spread over the area), who finishes a quest, the real XP and money, and the world map's quest
+  offers, saved for the account outside combat. Facts only, with a first and last day; a fixed
+  size. Not in the export yet: wowchar takes it in a later version.
+- A settings panel (Options > AddOns, or `/wowchar settings`): «Collect quest data» (on) and
+  «Show the guide at login» (off), and how much quest data is stored.
 - The guide and the waypoint fail on their own: on the first error each says one line in chat and
   turns off until `/reload`. The export and the saved data keep working whatever the guide does.
 

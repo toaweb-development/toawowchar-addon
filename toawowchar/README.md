@@ -48,7 +48,7 @@ A frame made from Blizzard's own templates, 620 by 470, centred, in wowchar's co
 
 ## The leveling guide
 
-Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers whether it was shown, where you dragged it and where you are on the route, per character.
+Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers where you dragged it and where you are on the route, per character. At login it stays hidden unless «Show the guide at login» is on (see «Settings»).
 
 - **The route** is the one for your race, as wowchar shows it on its Routes page: Human; Dwarf and Gnome; Night Elf; Orc and Troll; Undead; Tauren; High Order Skyborne; Windshaper Skyborne. It runs from level 1 to 40 through the zones in wowchar's plan. The two Skyborne routes have an orange line, **«Unconfirmed start. Zephras Isle is our best guess until launch.»**: where they start and the order after Zephras Isle are wowchar's assumptions until Forever is out. A race with no route gets a short message instead. Which race names the game gives the two Skyborne races is not known yet; the addon takes any race with «Skyborne» in its name and picks the route of your faction.
 - **The window** is a small dark panel, 300 pixels wide; its height follows what it shows. Drag it anywhere; it stays on the screen.
@@ -65,6 +65,29 @@ Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers 
 **If the guide hits an error** it says so in one chat line («toawowchar: the guide hit an error and is turned off for this session: …»), hides, and stays off until `/reload`. The same goes for the waypoint alone: the guide then goes on without it. The export (`/wowchar`) and the saved data keep working either way.
 
 **Not tested in a real client yet:** the guide is new in 0.5.0 and was checked only in the tests, with a stand-in for the game. The waypoint, the navigation marker and the race names of the two Skyborne races in particular have not been seen in Forever.
+
+## Quest data collection
+
+While you play, the addon writes down what the game shows about quests, so wowchar can build its own quest database for Forever's new zones (Questie and the client files do not have them). It keeps facts, not a diary: no times and no trail of where you walked.
+
+- **Offered or accepted:** the quest's id, title and level, its objectives and the reward choices; the NPC who gives it (id and name) and where you stand when it is offered.
+- **Objectives:** where you are when an objective counts up, at most 20 places per objective, spread over the area.
+- **Turned in:** the NPC who finishes it and where, and the XP and money you actually got.
+- **The world map:** the quest offers it shows for the map you open.
+- Nothing is recorded in combat (what counted up is written down where you are when combat ends). Inside an instance, or where the game gives no position, the facts are kept without a place.
+- Each quest and NPC has the day it was first and last seen and the game build. The whole store has a fixed size; when it is full, the places of the quests seen longest ago go first.
+
+It is stored in the saved file for your account (`toawowcharDB.observed`), not sent anywhere, and **not in the export text yet**: wowchar takes it in a later version. Turn it off in the settings. If it hits an error it says so in one chat line and stops until `/reload`; the export, the saved data and the guide keep working.
+
+**Not tested in a real client yet.**
+
+## Settings
+
+Options > AddOns > toawowchar, or `/wowchar settings`:
+
+- **Collect quest data** (on by default).
+- **Show the guide at login** (off by default).
+- A line with how many quests, NPCs and places are stored.
 
 ## What is in the text
 
@@ -94,7 +117,7 @@ The rest is the character data wowchar uses to show what fits your character:
 
 ## The cache
 
-SavedVariables `toawowcharDB` has a version (`dbVersion`, 2 since 0.5.0). The cache is `toawowcharDB.realms[realm][name]`; the guide's window and each character's place on the route are in `toawowcharDB.guide`. A file from 0.4.x is moved into this layout the first time 0.5.0 loads it, so nothing is lost; a file written by a newer version than yours is not touched (the addon then keeps everything in memory for that play session only). The cache holds, for each character:
+SavedVariables `toawowcharDB` has a version (`dbVersion`, 3 since 0.5.0). The cache is `toawowcharDB.realms[realm][name]`; the guide's window and each character's place on the route are in `toawowcharDB.guide`, the settings in `toawowcharDB.settings` and the collected quest data in `toawowcharDB.observed`. A file from 0.4.x is moved into this layout the first time 0.5.0 loads it, so nothing is lost; a file written by a newer version than yours is not touched (the addon then keeps everything in memory for that play session only). The cache holds, for each character:
 
 | Saved | Merged or replaced | Time |
 |---|---|---|
@@ -140,7 +163,7 @@ In wowchar, bank items and warband bank items count as obtained only when the te
 
 ## What is new
 
-**0.5.0.** A leveling guide: `/wowchar guide` shows the next steps of wowchar's leveling route for your race (levels 1 to 40), in a small panel with «Back», «Skip» and «Hide», and puts the game's own waypoint on each step. The routes come with the addon. The saved file gets a version (`dbVersion` 2); a 0.4.x file is moved over without losing anything. The export text is the same as in 0.4.1.
+**0.5.0.** A leveling guide: `/wowchar guide` shows the next steps of wowchar's leveling route for your race (levels 1 to 40), in a small panel with «Back», «Skip» and «Hide», and puts the game's own waypoint on each step. The routes come with the addon. Quest data collection for wowchar's quest database (stored, not exported yet) and a settings panel (`/wowchar settings`). The saved file gets a version (`dbVersion` 3); a 0.4.x file is moved over without losing anything. The export text is the same as in 0.4.1.
 
 **0.4.1.** The first release made from the addon's own repository, `toaweb/toawowchar-addon`. The code is the same as 0.4.0; one wrong comment about the Legacy cache was corrected.
 

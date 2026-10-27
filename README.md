@@ -41,6 +41,14 @@ Python 3.8 or newer, standard library only. The zip is the same bytes on every m
 
 The zip is stored without compression on purpose (131 KB): the same sha256 on every machine matters more than the size, so do not "fix" it.
 
+## Update the leveling routes
+
+```sh
+python3 scripts/fetch-routes.py --uimap ~/projects/forever-db2/1.60.1.70532/uimap.csv
+```
+
+Reads wowchar's route API (`https://wowchar.toaweb.com/api/routes` and `/api/routes/<start>` for the eight starts, GET only) and writes `toawowchar/Data/Routes.lua`. The answers are checked strictly; one odd value writes nothing. The same answers give the same bytes, so the file is committed and its diff shows what changed. `--uimap` checks every map id against the Forever client's own UiMap table and lists any it lacks. A new `Routes.lua` is a change to the zip, so it needs a version bump like any other.
+
 ## Cut a release
 
 1. On a branch from `main`, make the change and bump the version in **all five places** together: `## Version:` in `toawowchar/toawowchar.toc`, `ADDON_VERSION` and the first line (`-- toawowchar X.Y.Z`) in `toawowchar/Core.lua`, the `Version X.Y.Z` line under «Status» in `toawowchar/README.md`, and a new `## [X.Y.Z] - YYYY-MM-DD` entry in `CHANGELOG.md` (with its link at the bottom). The pull request's CI fails otherwise (`scripts/check-bump.py`). Any change to a file in the zip needs a new version, even a typo: wowchar serves the zip under a name that carries the version and caches it for a year.

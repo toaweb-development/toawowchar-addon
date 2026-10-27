@@ -100,7 +100,7 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
   })
 
   it('every file starts with the namespace line and shares state only through it', () => {
-    for (const file of ADDON_FILES.filter(f => !f.endsWith('/Data/Routes.lua'))) {
+    for (const file of ADDON_FILES) {
       const first = read(file).split('\n').find(l => l && !l.startsWith('--'))
       expect(first, file).toMatch(/^local (addonName|_), ns = \.\.\.$/)
     }

@@ -19,6 +19,7 @@ FOLDER = "toawowchar"
 ZIP_FILES = (
     "Cache.lua",
     "Core.lua",
+    "Data/Routes.lua",
     "Export.lua",
     "Locales/enUS.lua",
     "README.md",

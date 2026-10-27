@@ -23,6 +23,8 @@ From `docs/wow-addon-rules.md`, decided by the owner:
 | The example exports of a release | The same examples, committed as fixtures that must import without error |
 | `test/contract.json`, a **copy** of the limits | **The format itself** |
 
+**The leveling routes are owned by wowchar too.** It generates them (its «Generate routes» admin action) and serves them at `/api/routes`; `scripts/fetch-routes.py` turns the answer into `toawowchar/Data/Routes.lua`, which is generated, committed and never edited by hand. A change to the route answer's shape is made in wowchar first, then in the script and its tests here.
+
 **The export formats are owned by wowchar.** The truth is in its `app/shared/addon-export-format.ts` (prefixes, formats, length limit), `app/shared/addon-sections.ts` (section names, missing reasons, cached sections) and the decoder in `app/server/utils/addon-export.ts` (`ADDON_BOUNDS`, `ADDON_LIST_CAPS`). `test/contract.json` is a copy taken at wowchar commit `dfba6fc`; when wowchar changes one of those values, the copy is changed in the matching pull request here. Never change the copy alone to make a test pass.
 
 **A format change goes as two pull requests, one per repository, and the web-app session is told first** (the owner or the lead tells it; do not start the addon side alone). wowchar still reads older formats, so its pull request is merged and deployed first, then this repository's, then a release, then wowchar moves its pin.

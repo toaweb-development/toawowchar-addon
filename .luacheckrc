@@ -35,3 +35,9 @@ read_globals = {
     -- global constants
     "BANK_CONTAINER", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "PVP_RANK_POINTS_FACTION_ID",
 }
+
+-- Generated data (scripts/fetch-routes.py): an objective note is one string on one line, up to
+-- 4000 characters, so the line length is not checked there. Every other check still applies.
+files["toawowchar/Data/Routes.lua"] = {
+    max_line_length = false,
+}

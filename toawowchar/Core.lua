@@ -575,9 +575,10 @@ end
 local DB_VERSION = 3
 local sessionDB
 
+-- The step from each version: `legacy` for a table with no dbVersion (0.4.x), then by number.
 local MIGRATIONS = {
     -- nil -> 2
-    [0] = function(db)
+    legacy = function(db)
         local realms = {}
         for key, value in pairs(db) do
             realms[key] = value
@@ -598,12 +599,13 @@ local MIGRATIONS = {
 
 -- True when the table is one this addon can bring to DB_VERSION.
 local function Known(db)
-    return db.dbVersion == nil or db.dbVersion == DB_VERSION or MIGRATIONS[db.dbVersion] ~= nil
+    local v = db.dbVersion
+    return v == nil or v == DB_VERSION or (type(v) == "number" and v >= 2 and MIGRATIONS[v] ~= nil)
 end
 
 local function MigrateDB(db)
     while db.dbVersion ~= DB_VERSION do
-        local step = MIGRATIONS[db.dbVersion or 0]
+        local step = db.dbVersion == nil and MIGRATIONS.legacy or MIGRATIONS[db.dbVersion]
         if not step then
             return
         end

@@ -22,6 +22,7 @@ local game = {
     order = {},       -- the log's quest ids in order
     lines = {},       -- uiMapID -> the QuestLineInfo list of the world map
     requested = {},
+    parents = { [2400] = 2401 }, -- the player's map 2400 lies inside 2401
 }
 
 UnitGUID = function(unit)
@@ -52,7 +53,7 @@ C_Map = {
         local x, y = game.x, game.y
         return { GetXY = function() return x, y end }
     end,
-    GetMapInfo = function(id) return { mapID = id, parentMapID = 0 } end,
+    GetMapInfo = function(id) return { mapID = id, parentMapID = game.parents[id] or 0 } end,
 }
 
 C_QuestLog = {
@@ -187,7 +188,13 @@ elseif scenario == "map" then
     worldMap.mapID = 2401
     Env.fire("QUESTLINE_UPDATE", false)
     emit("update", { O().quests[603].offer })
+    -- a map elsewhere (not the player's, nor around it): nothing from browsing
+    game.lines[2500] = { { questID = 605, questName = "Far Away", x = 0.4, y = 0.4 } }
+    worldMap.mapID = 2500
+    Env.fire("QUESTLINE_UPDATE", false)
+    emit("elsewhere", { O().quests[605] == nil })
     -- closed: nothing
+    worldMap.mapID = 2401
     worldMap.shown = false
     game.lines[2401] = { { questID = 604, questName = "Late", x = 0.1, y = 0.1 } }
     Env.fire("QUESTLINE_UPDATE", false)
@@ -220,6 +227,14 @@ elseif scenario == "no-position" then
     game.detail = { id = 705, title = "Wanted", choices = {} }
     Env.fire("QUEST_DETAIL")
     emit("object", { O().quests[705].giver == nil, O().npcs[123456] == nil })
+    -- shared by a party member (the "npc" is a player): the start next to the real giver stays
+    at(0.3, 0.3)
+    offer(706, "Shared", 70106, "Real Giver")
+    at(0.9, 0.9)
+    game.npc = { guid = "Player-3110-0A1B2C3D", name = "Friend" }
+    game.detail = { id = 706, title = "Shared", choices = {} }
+    Env.fire("QUEST_DETAIL")
+    emit("shared", { quest(706).start, quest(706).giver })
 
 elseif scenario == "combat" then
     -- In combat nothing is read or written; what counted up is recorded after combat.
@@ -302,7 +317,8 @@ elseif scenario == "cap" then
     at(0.9, 0.1)
     count(2001, 1, 2)
     q, n, p = Env.ns.Collect.Counts()
-    emit("after", { q, n, p, #quests[1].points[1], #quests[2].points[1], #points(2001, 1), O().npcs[5] ~= nil })
+    emit("after", { q, n, p, #quests[1].points[1], #quests[2].points[1], #points(2001, 1), O().npcs[5] ~= nil,
+        quests[1].points[1][1][2] })
 
 elseif scenario == "zone15" then
     -- A made-up zone of 15 quests played through: each offered by an NPC, accepted, two
@@ -400,4 +416,29 @@ if scenario == "settings" then
     Env.slash("/wowchar settings")
     local text = Env.run()
     emit("error", { Env.chat[#Env.chat], Env.ns.SettingsPanel.part.IsOff(), Env.ns.Collect.part.IsOff(), text:sub(1, 10) })
+end
+
+if scenario == "debounce" then
+    -- With C_Timer: a burst of updates is read once; a read that waits into combat comes after it.
+    Env.useTimers()
+    load()
+    accept(1301, "Timed", { { "Crabs: 0/9", 0, 9 } })
+    at(0.2, 0.2)
+    game.log[1301].objectives[1][2] = 1
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.fire("UNIT_QUEST_LOG_CHANGED", "player")
+    emit("burst", { #Env.timers, math.floor(Env.timerDelays[1] * 1000 + 0.5) })
+    Env.flushTimers()
+    emit("read", { #points(1301, 1) })
+    at(0.7, 0.7)
+    game.log[1301].objectives[1][2] = 2
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.combat = true
+    Env.flushTimers()
+    emit("waited-into-combat", { #points(1301, 1) })
+    Env.combat = false
+    Env.fire("PLAYER_REGEN_ENABLED")
+    Env.flushTimers()
+    emit("after-combat", { #points(1301, 1) })
 end

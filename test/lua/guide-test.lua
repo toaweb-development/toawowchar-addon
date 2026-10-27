@@ -766,6 +766,14 @@ elseif scenario == "migration" then
     login()
     Env.slash("/wowchar guide")
     emit("newer", { toawowcharDB.dbVersion, toawowcharDB.whatever, toawowcharDB.realms == nil, toawowcharDB.guide == nil })
+    -- a dbVersion no addon wrote (0, or text) is not migrated as 0.4.x: left alone too
+    for _, odd in ipairs({ 0, "2" }) do
+        Env.relog()
+        toawowcharDB = { dbVersion = odd, Forever = { Thor = { v = 1 } } }
+        load()
+        Env.ns.DB()
+        emit("odd-" .. tostring(odd), { toawowcharDB.dbVersion, toawowcharDB.realms == nil, toawowcharDB.Forever ~= nil })
+    end
     -- dbVersion 2 (0.5.0 before collection) becomes 3: settings with their defaults, an empty
     -- observed table; the cache and the guide are kept as they are
     Env.relog()

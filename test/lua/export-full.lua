@@ -71,7 +71,8 @@ local mode = arg and arg[1]
 --   observed           the section on: the same text plus sections.observed
 --   collect-error      the section on and the collection raising: observed is missing, the
 --                      rest is the same text, the guide starts
-local observedModes = { ["observed-off"] = true, observed = true, ["collect-error"] = true }
+--   observed-big       the section on and far too long: it alone is left out (too_large)
+local observedModes = { ["observed-off"] = true, observed = true, ["collect-error"] = true, ["observed-big"] = true }
 if observedModes[mode] then
     Env.ns.DB()
     local o = toawowcharDB.observed
@@ -80,6 +81,14 @@ if observedModes[mode] then
         xp = 1350, money = 425, first = 20740, last = 20741, build = "70532" }
     o.npcs[70001] = { name = "Ranger Aelith", map = 2400, x = 432, y = 568, first = 20740, last = 20740, build = "70532" }
     Env.ns.EXPORT_OBSERVED = mode ~= "observed-off"
+    if mode == "observed-big" then
+        for id = 1, 400 do
+            local list = {}
+            for i = 1, 20 do list[i] = { 2400, i * 40, id % 1000 } end
+            o.quests[10000 + id] = { title = "A quest with a long enough title " .. id, level = 30, points = { list, list },
+                first = 20740, last = 20741, build = "70532" }
+        end
+    end
     if mode == "collect-error" then
         Env.ns.Collect.Section = function() error("section broken on purpose", 0) end
     end

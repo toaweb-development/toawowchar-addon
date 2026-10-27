@@ -55,6 +55,7 @@ describe('collection: each event records its facts', () => {
     expect(get('map', 'requested')).toEqual([2400])
     expect(get('map', 'offers')).toEqual(['Feathers in the Wind', [2400, 250, 750], [2400, 500, 125]])
     expect(get('map', 'update')).toEqual([[2401, 900, 900]])
+    expect(get('map', 'elsewhere')).toEqual([true])
     expect(get('map', 'closed')).toEqual([true])
   })
 
@@ -62,6 +63,10 @@ describe('collection: each event records its facts', () => {
     expect(get('no-position', 'instance')).toEqual(['Deep Trouble', 70101, true, 'Captain Holt', true, 0])
     expect(get('no-position', 'no-map')).toEqual([true, true])
     expect(get('no-position', 'hidden')).toEqual([true])
+  })
+
+  it('a quest shared by a party member keeps the start beside its real giver', () => {
+    expect(get('no-position', 'shared')).toEqual([[2400, 300, 300], 70106])
   })
 
   it('a hidden GUID or an object gives no NPC', () => {
@@ -74,6 +79,13 @@ describe('collection: combat and the setting', () => {
   it('nothing is recorded in combat; what counted up is recorded once after it, where the player is', () => {
     expect(get('combat', 'in-combat')).toEqual([true])
     expect(get('combat', 'after-combat')).toEqual([[[2400, 700, 700]], true])
+  })
+
+  it('with C_Timer a burst of quest log updates is read once, 0.3 s later; a read that waits into combat comes after it', () => {
+    expect(get('debounce', 'burst')).toEqual([1, 300]) // ms
+    expect(get('debounce', 'read')).toEqual([1])
+    expect(get('debounce', 'waited-into-combat')).toEqual([1])
+    expect(get('debounce', 'after-combat')).toEqual([2])
   })
 
   it('«Collect quest data» off: nothing; on again it starts afresh, then counts as before', () => {
@@ -95,7 +107,8 @@ describe('collection: points spread over the area, and the size cap', () => {
 
   it('full: the points of the quest seen longest ago go first; the total stays at the cap; quests and NPCs stay', () => {
     expect(get('cap', 'full')).toEqual([200, 1, 4000, true])
-    expect(get('cap', 'after')).toEqual([201, 1, 4000, 18, 20, 2, true])
+    // the oldest quest's first-kept points go (x 40 and 80), not the newest
+    expect(get('cap', 'after')).toEqual([201, 1, 4000, 18, 20, 2, true, 120])
   })
 
   it('a zone of 15 quests: 15 quests, 19 NPCs, 480 points, about 15 KB as the export section', () => {
@@ -138,6 +151,14 @@ describe('the export: the «observed» section', () => {
     expect(observed.npcs).toEqual([{ build: '70532', first: 20740, id: 70001, last: 20740, map: 2400, name: 'Ranger Aelith', x: 432, y: 568 }])
     expect(observed.quests[0].points).toEqual([[1, 2400, 500, 500], [1, 2400, 600, 550]])
     expect(text.replace(`"observed":${JSON.stringify(observed)},`, '')).toBe(FIXTURE)
+    delete j.sections.observed
+    expect(j).toEqual(JSON.parse(FIXTURE.slice(PREFIX.length)))
+  })
+
+  it('on and far too long: only the observations are left out (too_large); the rest is the same text', () => {
+    const { text } = run('observed-big')
+    const j = JSON.parse(text.slice(PREFIX.length))
+    expect(j.sections.observed).toEqual({ source: 'missing', why: 'too_large' })
     delete j.sections.observed
     expect(j).toEqual(JSON.parse(FIXTURE.slice(PREFIX.length)))
   })

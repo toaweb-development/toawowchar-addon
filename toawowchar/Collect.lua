@@ -14,7 +14,8 @@
 --   UNIT_QUEST_LOG_CHANGED)   recorded at the first update after combat, where the player is then.
 --   finished (QUEST_COMPLETE) the finisher's NPC id, name and position
 --   turned in (QUEST_TURNED_IN) the XP and money the game gave (its own numbers for Forever)
---   the world map opens       the quest offers it shows for its map (C_QuestLine), with x, y
+--   the world map opens       the quest offers it shows (C_QuestLine), with x, y, for the map
+--                            the player is on or one around it (not for zones only browsed)
 -- Inside an instance, or when the game gives no position (or a hidden one), the facts are kept
 -- without a position. Records hold facts only: no time per point and no trail. Each quest and
 -- NPC record has `first` and `last` (days since 1970, from time()) and the client build.
@@ -143,13 +144,17 @@ local function Number(value, min, max)
     return nil
 end
 
--- fn(...) in pcall; its first result, or nil.
+-- fn(...) in pcall; its first result, or nil. The value is not looked at here (no truth test,
+-- no comparison): it may be secret, and only GameText, Number and NpcId check that first.
 local function Ask(fn, ...)
     if type(fn) ~= "function" then
         return nil
     end
     local ok, value = pcall(fn, ...)
-    return ok and value or nil
+    if not ok then
+        return nil
+    end
+    return value
 end
 
 local function Day()
@@ -288,7 +293,7 @@ end
 local function Level(q, id)
     local level = Number(Ask(C_QuestLog and C_QuestLog.GetQuestDifficultyLevel, id), 1, 255)
     if not level and C_QuestLog and C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetInfo then
-        local index = Ask(C_QuestLog.GetLogIndexForQuestID, id)
+        local index = Number(Ask(C_QuestLog.GetLogIndexForQuestID, id), 1, 500)
         local info = index and Ask(C_QuestLog.GetInfo, index)
         level = type(info) == "table" and Number(info.level, 1, 255) or nil
     end
@@ -394,7 +399,7 @@ local function DropOldest()
             longest = i
         end
     end
-    table.remove(q.points[longest])
+    table.remove(q.points[longest], 1) -- the first kept is the oldest of that list
     sizes.points = sizes.points - 1
     return true
 end
@@ -441,7 +446,7 @@ function handlers.QUEST_DETAIL(startItem)
     for i = 1, math.min(n, MAX_CHOICES) do
         local item = true
         if GetQuestItemInfoLootType then
-            item = Ask(GetQuestItemInfoLootType, "choice", i) == 0
+            item = Number(Ask(GetQuestItemInfoLootType, "choice", i), 0, 100) == 0
         end
         if item and GetQuestItemInfo then
             local ok, _, _, _, _, _, itemId = pcall(GetQuestItemInfo, "choice", i)
@@ -455,9 +460,12 @@ function handlers.QUEST_DETAIL(startItem)
         q.choices = choices
     end
     local giver = Npc(position)
+    local item = Number(startItem, 1, 2147483647)
     q.giver = giver or q.giver
-    q.startItem = Number(startItem, 1, 2147483647) or q.startItem
-    if position then
+    q.startItem = item or q.startItem
+    -- The place counts as the quest's start only next to its giver (or with its item): a quest
+    -- a party member shares is offered wherever the player is.
+    if position and (giver or item) then
         q.start = position
     end
     offered[id] = true
@@ -499,6 +507,10 @@ end
 -- Every quest in the log: the counts that went up since last time get a point here.
 local function ReadLog()
     pendingRead = false
+    if InCombat() then
+        missedInCombat = true -- combat began while the read waited: it comes after combat
+        return
+    end
     if not On() then
         return
     end
@@ -598,6 +610,23 @@ function handlers.QUEST_TURNED_IN(questId, xp, money)
     end
 end
 
+-- True when map is the player's map or one of the maps around it (up to MAP_DEPTH parents).
+local MAP_DEPTH = 6
+local function AroundPlayer(map)
+    local here = Number(Ask(C_Map and C_Map.GetBestMapForUnit, "player"), 1, 1e9)
+    for _ = 1, MAP_DEPTH do
+        if not here then
+            return false
+        end
+        if here == map then
+            return true
+        end
+        local info = Ask(C_Map.GetMapInfo, here)
+        here = type(info) == "table" and Number(info.parentMapID, 1, 1e9) or nil
+    end
+    return false
+end
+
 -- The world map's quest offers for the map it shows.
 local function ReadMap()
     if not On() or not (WorldMapFrame and WorldMapFrame.GetMapID and C_QuestLine and C_QuestLine.GetAvailableQuestLines) then
@@ -607,7 +636,12 @@ local function ReadMap()
         return
     end
     local map = Number(Ask(WorldMapFrame.GetMapID, WorldMapFrame), 1, 1e9)
-    local lines = map and Ask(C_QuestLine.GetAvailableQuestLines, map)
+    -- Only the map the player is on (or one around it): browsing other zones does not fill
+    -- the store with quests from everywhere.
+    if not map or not AroundPlayer(map) then
+        return
+    end
+    local lines = Ask(C_QuestLine.GetAvailableQuestLines, map)
     if type(lines) ~= "table" then
         return
     end
@@ -705,7 +739,7 @@ function Collect.Section()
     return { source = "live", quests = quests, npcs = npcs }
 end
 
--- A new day or a migration: the counts are taken again on the next call.
+-- The setting was switched: the counts and what this session saw are taken afresh.
 function Collect.Forget()
     sizes, counts, offered = nil, nil, {}
 end

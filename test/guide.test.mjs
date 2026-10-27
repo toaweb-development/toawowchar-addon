@@ -389,6 +389,11 @@ describe('SavedVariables dbVersion 3', () => {
     expect(get('migration', 'from-2')).toEqual([3, [3, 9], 4, true, false, true, true])
   })
 
+  it('a dbVersion no addon writes (0, or text) is left alone like a newer one', () => {
+    expect(get('migration', 'odd-0')).toEqual([0, true, true])
+    expect(get('migration', 'odd-2')).toEqual(['2', true, true])
+  })
+
   it('leaves a table with a newer dbVersion untouched and works on a table of this session', () => {
     expect(get('migration', 'newer')).toEqual([9, [1], true, true])
   })

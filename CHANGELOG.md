@@ -31,6 +31,8 @@ A leveling guide. The export text is unchanged (format 3, the same bytes as 0.4.
 - The saved file has a version, `dbVersion` 2: the cache is under `realms`, the guide under `guide`.
   A 0.4.x file is migrated the first time 0.5.0 loads it; a file from a newer version is left untouched.
 - In combat the guide's window does not change; it catches up when combat ends.
+- The guide and the waypoint fail on their own: on the first error each says one line in chat and
+  turns off until `/reload`. The export and the saved data keep working whatever the guide does.
 
 ## [0.4.1] - 2026-10-22
 

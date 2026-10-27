@@ -55,8 +55,10 @@ Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers 
 - **Where you are.** At login and `/reload` the guide goes to the first step whose quests are not all done (accepted, objectives done, or turned in, as the step needs); if a travel or grind step comes right before it and is not done yet, it starts there.
 - **It moves on by itself**: an accept step when the quests are in your quest log, an objective step when the objectives it is about are done, a turn-in when the quests are turned in, a travel step when you are in its zone, a grind step when you reach the next step's level.
 - **«Skip»** passes a step you do not want (it is remembered). **«Back»** shows the step before and stays there until you press «Skip».
-- **The waypoint.** While the guide is shown, each step puts the game's own map waypoint on its place and tracks it, so the game shows its navigation marker and the arrow at the edge of the screen. A travel step points at the middle of the zone; a grind step has none. «Hide» removes the waypoint, but only the one the guide set: a waypoint you placed yourself stays.
+- **The waypoint.** While the guide is shown, each step puts the game's own map waypoint on its place and tracks it, so the game shows its navigation marker and the arrow at the edge of the screen. Travel and grind steps point at the middle of their zone. «Hide» removes the waypoint, but only the one the guide set: a waypoint you placed yourself stays.
 - **In combat** the window does not change (the game protects frames in combat); it catches up when combat ends.
+
+**If the guide hits an error** it says so in one chat line («toawowchar: the guide hit an error and is turned off for this session: …»), hides, and stays off until `/reload`. The same goes for the waypoint alone: the guide then goes on without it. The export (`/wowchar`) and the saved data keep working either way.
 
 **Not tested in a real client yet:** the guide is new in 0.5.0 and was checked only in the tests, with a stand-in for the game. The waypoint, the navigation marker and the race names of the two Skyborne races in particular have not been seen in Forever.
 

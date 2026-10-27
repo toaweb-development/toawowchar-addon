@@ -71,7 +71,7 @@ On 2026-10-22, in a real Forever client (build 70450, addon 0.4.0):
 - Every quest id checked exists in Questie.
 - Seen in a real export: a character with no spec chosen yet gets the class as its spec (spec id 1485, name «Hunter»). The addon sends what the game says; the web app handles it.
 
-**Not tested in a real client:** the bank and warband bank capture, and the recipes read from the profession window (not reachable yet). The flight map was not part of the check. Say so when writing about them; do not call them verified.
+**Not tested in a real client:** the bank and warband bank capture, and the recipes read from the profession window (not reachable yet). The flight map was not part of the check. The leveling guide (0.5.0) has not been in a real client at all: not its window, its events, the waypoint and the navigation marker, nor the race tokens of the two Skyborne races. Say so when writing about them; do not call them verified.
 
 ## Rules for work here
 

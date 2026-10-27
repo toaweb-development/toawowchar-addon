@@ -95,7 +95,8 @@ local function openWindows(g)
 end
 
 local function record()
-    return toawowcharDB and toawowcharDB.Forever and toawowcharDB.Forever.Thor
+    -- dbVersion 2: the cache is under realms (Core.lua, DB)
+    return toawowcharDB and toawowcharDB.realms and toawowcharDB.realms.Forever and toawowcharDB.realms.Forever.Thor
 end
 
 -- ── the relog ───────────────────────────────────────────────────────────

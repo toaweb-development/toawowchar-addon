@@ -22,8 +22,10 @@ read_globals = {
     "time", "tinsert",
     -- the C_ namespaces
     "C_ClassTalents", "C_Container", "C_GameRules", "C_MajorFactions", "C_Map", "C_QuestLog",
-    "C_Reputation", "C_SpecializationInfo", "C_SpellBook", "C_TaxiMap", "C_Timer",
+    "C_Reputation", "C_SpecializationInfo", "C_SpellBook", "C_SuperTrack", "C_TaxiMap", "C_Timer",
     "C_TradeSkillUI", "C_Traits",
+    -- Blizzard's Lua objects (Blizzard_ObjectAPI)
+    "UiMapPoint",
     -- tables of constants
     "Constants", "Enum",
     -- the player and the client

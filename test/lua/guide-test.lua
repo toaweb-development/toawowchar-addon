@@ -1,0 +1,429 @@
+-- The leveling guide (Guide.lua, Waypoint.lua, UI/GuideWindow.lua) on a small made-up route,
+-- with stubs of the quest log, the map and the waypoint API. Usage (from the repository root):
+--     lua test/lua/guide-test.lua <scenario>
+-- Prints lines `label<TAB>json` (the addon's own serializer); test/guide.test.mjs reads them.
+local scenario = arg[1] or "start"
+local Env = dofile("test/lua/wow-env.lua")
+
+local function emit(label, value)
+    print(label .. "\t" .. Env.ns.Serialize(value))
+end
+
+-- A set { [n] = true } as a sorted list (the serializer writes lists 1..n only).
+local function keys(set)
+    local list = {}
+    for k in pairs(set or {}) do list[#list + 1] = k end
+    table.sort(list)
+    return list
+end
+
+-- What is saved for Thor on Forever, with the skipped steps as a list.
+local function savedGuide()
+    local slot = toawowcharDB.guide.characters.Forever.Thor
+    return { route = slot.route, generated = slot.generated, step = slot.step, skipped = keys(slot.skipped) }
+end
+
+-- ── the game ────────────────────────────────────────────────────────────
+local game = {
+    race = "Human", faction = "Alliance", level = 1, map = 1429,
+    completed = {},   -- [questID] = true
+    log = {},         -- [questID] = { complete = bool, objectives = { { text, finished } } }
+    parents = { [1453] = 1429, [1429] = 1415, [1415] = 947, [1460] = 1436, [1436] = 1415 }, -- town maps inside the zones
+    waypoint = nil,   -- the user waypoint the game holds
+    superTracked = false,
+    calls = {},       -- the waypoint calls, in order
+    canSet = { [1429] = true, [1436] = true },
+}
+
+UnitRace = function() return game.race, (game.race:gsub(" ", "")), 1 end
+UnitFactionGroup = function() return game.faction, game.faction end
+UnitLevel = function() return game.level end
+
+C_QuestLog = {
+    IsQuestFlaggedCompleted = function(id) return game.completed[id] == true end,
+    GetLogIndexForQuestID = function(id) return game.log[id] and 1 or nil end,
+    IsComplete = function(id) return game.log[id] ~= nil and game.log[id].complete == true end,
+    GetQuestObjectives = function(id)
+        local q = game.log[id]
+        if not q then return {} end
+        local list = {}
+        for i, o in ipairs(q.objectives or {}) do
+            list[i] = { text = o[1], type = "monster", finished = o[2], numFulfilled = o[2] and 1 or 0, numRequired = 1 }
+        end
+        return list
+    end,
+}
+
+C_Map = {
+    GetBestMapForUnit = function() return game.map end,
+    GetMapInfo = function(id) return { mapID = id, name = "map", mapType = 3, parentMapID = game.parents[id] or 0, flags = 0 } end,
+    CanSetUserWaypointOnMap = function(id) return game.canSet[id] == true end,
+    SetUserWaypoint = function(point)
+        -- per mille: the serializer writes whole numbers only
+        game.calls[#game.calls + 1] = { "set", point.uiMapID, math.floor(point.position.x * 1000 + 0.5), math.floor(point.position.y * 1000 + 0.5) }
+        game.waypoint = point
+        return true
+    end,
+    ClearUserWaypoint = function()
+        game.calls[#game.calls + 1] = { "clear" }
+        game.waypoint = nil
+        game.superTracked = false
+    end,
+    HasUserWaypoint = function() return game.waypoint ~= nil end,
+    GetUserWaypoint = function() return game.waypoint end,
+}
+UiMapPoint = {
+    CreateFromCoordinates = function(mapID, x, y, z)
+        return { uiMapID = mapID, position = { x = x, y = y }, z = z }
+    end,
+}
+C_SuperTrack = {
+    SetSuperTrackedUserWaypoint = function(on)
+        game.calls[#game.calls + 1] = { "track", on }
+        game.superTracked = on
+    end,
+}
+
+-- ── the route ───────────────────────────────────────────────────────────
+-- { kind, uiMapId, x, y, questIds, name, level, text }; T holds the names and notes.
+local T = { "Marshal Dughan", "Kobold Vermin", "Tough Wolf Meat; Boar Hide", "Travel to Westfall", "Grind to level 5 (about 900 XP)", "Gryan Stoutmantle" }
+local function routeData()
+    return {
+        texts = T,
+        quests = { [101] = "Kobold Camp Cleanup", [102] = "Wolves | Boars", [201] = "The People's Militia" },
+        zones = { [1429] = "Elwynn Forest", [1436] = "Westfall" },
+        routes = {
+            human = {
+                start = "human", faction = "A", questie = "v1", generated = "2026-10-27T06:00:43.496Z", confirmed = true, levelEnd = 6,
+                steps = {
+                    { 1, 1429, 42.1, 65.9, { 101 }, 1, 1, 0 },      -- 1 accept 101 from the Marshal
+                    { 1, 1429, 42.1, 65.9, { 102 }, 1, 1, 0 },      -- 2 accept 102
+                    { 2, 1429, 61.0, 47.5, { 101 }, 0, 2, 2 },      -- 3 objective of 101: Kobold Vermin
+                    { 2, 1429, 70.2, 30.0, { 102 }, 0, 3, 3 },      -- 4 objectives of 102: wolf meat and boar hide
+                    { 3, 1429, 42.1, 65.9, { 101, 102 }, 1, 4, 0 }, -- 5 turn in both
+                    { 4, 1436, 50, 50, {}, 0, 4, 4 },               -- 6 travel to Westfall
+                    { 5, 1436, 50, 50, {}, 0, 4, 5 },               -- 7 grind to the next step's level (5)
+                    { 1, 1436, 56.3, 47.5, { 201 }, 6, 5, 0 },      -- 8 accept 201
+                    { 3, 1436, 56.3, 47.5, { 201 }, 6, 6, 0 },      -- 9 turn in 201
+                },
+            },
+            ["skyborne-a"] = {
+                start = "skyborne-a", faction = "A", questie = "v1", generated = "2026-10-27T06:00:43.496Z", confirmed = false, levelEnd = 2,
+                steps = { { 1, 1429, 10, 10, { 101 }, 1, 1, 0 } },
+            },
+            ["skyborne-h"] = {
+                start = "skyborne-h", faction = "H", questie = "v1", generated = "2026-10-27T06:00:43.496Z", confirmed = false, levelEnd = 2,
+                steps = { { 1, 1429, 10, 10, { 101 }, 1, 1, 0 } },
+            },
+        },
+    }
+end
+
+local function load()
+    Env.load()
+    Env.ns.RouteData = routeData()
+    Env.fire("ADDON_LOADED", "toawowchar")
+end
+
+local function login()
+    Env.fire("PLAYER_ENTERING_WORLD", true, false)
+end
+
+local G = function() return Env.ns.Guide end
+local function index() return G().state.index end
+
+local function frameText()
+    local f = Env.frameNamed("toawowcharGuideFrame")
+    local lines = {}
+    if not f then return lines end
+    for _, fs in ipairs(Env.fontStrings) do
+        if fs.parent == f and fs.text and fs.text ~= "" then lines[#lines + 1] = fs.text end
+    end
+    return lines
+end
+
+local function shown()
+    local f = Env.frameNamed("toawowcharGuideFrame")
+    return f ~= nil and f.shown == true
+end
+
+-- ── scenarios ───────────────────────────────────────────────────────────
+if scenario == "start" then
+    -- The start key for every race token the game may give, and the route the guide takes.
+    load()
+    local cases = {
+        { "Human", "Alliance" }, { "Dwarf", "Alliance" }, { "Gnome", "Alliance" }, { "NightElf", "Alliance" },
+        { "Orc", "Horde" }, { "Troll", "Horde" }, { "Scourge", "Horde" }, { "Tauren", "Horde" },
+        { "HighOrderSkyborne", "Alliance" }, { "WindshaperSkyborne", "Horde" }, { "Skyborne", "Alliance" }, { "Skyborne", "Horde" },
+        { "Skyborne", "Neutral" }, { "Harronir", "Alliance" }, { "Pandaren", "Neutral" },
+    }
+    local keys = {}
+    for i, c in ipairs(cases) do keys[i] = { c[1], c[2], G().StartFor(c[1], c[2]) or false } end
+    emit("keys", keys)
+    emit("not-a-string", { G().StartFor(nil, "Alliance") or false })
+
+elseif scenario == "window-start" then
+    -- What the window says at the start of a confirmed route, a Skyborne one, and with no route.
+    local function windowFor(race, faction)
+        Env.relog()
+        toawowcharDB = nil
+        game.race, game.faction = race, faction
+        load()
+        login()
+        Env.slash("/wowchar guide")
+        return { G().state.key or false, frameText() }
+    end
+    emit("human", windowFor("Human", "Alliance"))
+    emit("skyborne", windowFor("High Order Skyborne", "Alliance"))
+    emit("skyborne-h", windowFor("Windshaper Skyborne", "Horde"))
+    emit("none", windowFor("Pandaren", "Alliance"))
+
+elseif scenario == "login" then
+    -- Login and /reload: the first quest step whose quests are not all done.
+    load()
+    local function at(setup)
+        Env.relog()
+        toawowcharDB = nil
+        game.completed, game.log, game.level, game.map = {}, {}, 1, 1429
+        setup()
+        load()
+        login()
+        return index()
+    end
+    emit("fresh", { at(function() end) })
+    emit("one-accepted", { at(function() game.log[101] = { objectives = { { "Kobold Vermin slain: 0/10", false } } } end) })
+    emit("both-accepted", { at(function()
+        game.log[101] = { objectives = { { "Kobold Vermin slain: 0/10", false } } }
+        game.log[102] = { objectives = {} }
+    end) })
+    emit("objective-done", { at(function()
+        game.log[101] = { complete = true }
+        game.log[102] = { objectives = { { "Tough Wolf Meat: 8/8", true }, { "Boar Hide: 2/6", false } } }
+    end) })
+    -- both turned in, still in Elwynn: the travel step before the next quest step comes first
+    emit("turned-in-elwynn", { at(function() game.completed[101], game.completed[102] = true, true end) })
+    -- in Westfall at level 4: the grind step (the next step wants level 5)
+    emit("turned-in-westfall", { at(function()
+        game.completed[101], game.completed[102] = true, true
+        game.map, game.level = 1436, 4
+    end) })
+    -- in Westfall at level 5: the accept after the grind
+    emit("turned-in-level5", { at(function()
+        game.completed[101], game.completed[102] = true, true
+        game.map, game.level = 1436, 5
+    end) })
+    emit("all-done", { at(function() game.completed[101], game.completed[102], game.completed[201] = true, true, true end), #G().state.route.steps })
+    -- a quest turned in out of order does not move the position past an earlier step
+    emit("out-of-order", { at(function() game.completed[201] = true end) })
+    -- the quest log may still be empty when the world is entered: the first update finds it again
+    Env.relog()
+    toawowcharDB = nil
+    game.completed, game.log, game.level, game.map = {}, {}, 1, 1429
+    load()
+    login()
+    local before = index()
+    game.log[101], game.log[102] = { objectives = {} }, { objectives = {} }
+    Env.fire("QUEST_LOG_UPDATE")
+    emit("late-log", { before, index() })
+
+elseif scenario == "advance" then
+    -- Every kind of step moves on with its own event, and only then.
+    load()
+    login()
+    local trail = { { "login", index() } }
+    local function note(label) trail[#trail + 1] = { label, index() } end
+    Env.fire("QUEST_LOG_UPDATE"); note("log-update-nothing")
+    game.log[101] = { objectives = { { "Kobold Vermin slain: 0/10", false } } }
+    Env.fire("QUEST_ACCEPTED", 101); note("accepted-101")
+    game.log[102] = { objectives = { { "Tough Wolf Meat: 0/8", false }, { "Boar Hide: 0/6", false } } }
+    Env.fire("QUEST_ACCEPTED", 102); note("accepted-102")
+    game.log[101].objectives[1][2] = true
+    Env.fire("UNIT_QUEST_LOG_CHANGED", "target"); note("other-unit")
+    Env.fire("UNIT_QUEST_LOG_CHANGED", "player"); note("kobolds-done")
+    game.log[102].objectives[1][2] = true
+    Env.fire("QUEST_LOG_UPDATE"); note("one-of-two")
+    game.log[102].objectives[2][2] = true
+    Env.fire("QUEST_LOG_UPDATE"); note("both")
+    game.log[101] = nil
+    Env.fire("QUEST_TURNED_IN", 101, 100, 10); note("turned-in-101")
+    game.log[102] = nil
+    Env.fire("QUEST_TURNED_IN", 102, 100, 10); note("turned-in-102") -- the game's flag is not set yet
+    Env.fire("ZONE_CHANGED"); note("zone-changed-still-elwynn")
+    game.map = 1436
+    Env.fire("ZONE_CHANGED_NEW_AREA"); note("westfall")
+    game.level = 4
+    Env.fire("PLAYER_LEVEL_UP", 4); note("level-4")
+    Env.fire("PLAYER_LEVEL_UP", 5); note("level-5") -- UnitLevel still says 4: the event's level counts
+    game.log[201] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 201); note("accepted-201")
+    game.log[201] = nil
+    game.completed[201] = true
+    Env.fire("QUEST_TURNED_IN", 201, 100, 10); note("done")
+    emit("trail", trail)
+    emit("saved", savedGuide())
+    -- a town map inside the zone to travel to counts as the zone
+    Env.relog()
+    toawowcharDB = nil
+    game.completed, game.log, game.level = { [101] = true, [102] = true }, {}, 1
+    game.map = 1460
+    load()
+    login()
+    emit("town-in-elwynn", { index(), G().StepDone(6) })
+
+elseif scenario == "buttons" then
+    -- Skip, Back and Hide, and what is saved per character.
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    local f = Env.frameNamed("toawowcharGuideFrame")
+    local buttons = {}
+    for _, child in ipairs(Env.frames) do
+        if child.parent == f and child.kind == "Button" then buttons[child.text] = child end
+    end
+    emit("labels", { buttons.Back ~= nil, buttons.Skip ~= nil, buttons.Hide ~= nil })
+    buttons.Skip.scripts.OnClick(buttons.Skip)
+    emit("skip", { index(), savedGuide().skipped })
+    buttons.Back.scripts.OnClick(buttons.Back)
+    emit("back", { index(), G().state.held, savedGuide().skipped })
+    -- held: an event that finishes the step does not move it on
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    emit("held", { index() })
+    buttons.Skip.scripts.OnClick(buttons.Skip)
+    emit("skip-after-back", { index(), G().state.held })
+    -- a relog keeps the skipped steps: 101 is abandoned, but step 1 was skipped, so the guide is at 2
+    game.log[101] = nil
+    Env.relog()
+    load()
+    login()
+    emit("relog", { index(), savedGuide().step, savedGuide().skipped })
+    -- a new route (another generated time) forgets the skipped steps
+    Env.relog()
+    Env.load()
+    local data = routeData()
+    data.routes.human.generated = "2026-11-01T00:00:00.000Z"
+    Env.ns.RouteData = data
+    Env.fire("ADDON_LOADED", "toawowchar")
+    login()
+    emit("new-route", { index() })
+    -- Hide: the window goes, shown = false is saved
+    Env.slash("/wowchar guide")
+    Env.slash("/wowchar guide")
+    local f2 = Env.frameNamed("toawowcharGuideFrame")
+    local hide
+    for _, child in ipairs(Env.frames) do
+        if child.parent == f2 and child.kind == "Button" and child.text == "Hide" then hide = child end
+    end
+    hide.scripts.OnClick(hide)
+    emit("hidden", { shown(), toawowcharDB.guide.shown })
+
+elseif scenario == "window" then
+    -- The window: three steps with /way lines, its place saved, shown again after a relog.
+    load()
+    login()
+    emit("before-command", { shown() })
+    Env.slash("/wowchar guide")
+    emit("after-command", { shown(), toawowcharDB.guide.shown })
+    emit("text", frameText())
+    local f = Env.frameNamed("toawowcharGuideFrame")
+    f.scripts.OnDragStart(f)
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 120.4, 640.6)
+    f.scripts.OnDragStop(f)
+    emit("point", toawowcharDB.guide.point)
+    local saved = toawowcharDB
+    Env.relog()
+    toawowcharDB = saved
+    load()
+    login()
+    local g = Env.frameNamed("toawowcharGuideFrame")
+    emit("relog", { shown(), g.points[1][1], g.points[1][3], g.points[1][4], g.points[1][5] })
+    -- a damaged point puts it at the default place
+    toawowcharDB.guide.point = { "NOWHERE", "TOP", 1, 2 }
+    Env.relog()
+    toawowcharDB = saved
+    load()
+    login()
+    emit("damaged-point", { Env.frameNamed("toawowcharGuideFrame").points[1][1] })
+    -- /wowchar guide twice: hidden again
+    Env.slash("/wowchar guide")
+    emit("toggled", { shown(), toawowcharDB.guide.shown })
+
+elseif scenario == "waypoint" then
+    load()
+    login()
+    emit("hidden-no-waypoint", game.calls)
+    Env.slash("/wowchar guide")
+    emit("shown", game.calls)
+    game.calls = {}
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    emit("next-step", game.calls)
+    game.calls = {}
+    Env.slash("/wowchar guide")
+    emit("hidden", { game.calls, game.waypoint ~= nil })
+    -- a waypoint the player placed is not cleared
+    Env.slash("/wowchar guide")
+    game.waypoint = { uiMapID = 1436, position = { x = 0.3, y = 0.3 } }
+    game.calls = {}
+    Env.slash("/wowchar guide")
+    emit("players-own", { game.calls, game.waypoint ~= nil })
+    -- grind steps have no waypoint; a map the game refuses gets none
+    Env.relog()
+    toawowcharDB = nil
+    game.calls, game.waypoint = {}, nil
+    game.completed, game.log, game.map, game.level = { [101] = true, [102] = true }, {}, 1436, 4
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    emit("grind", { index(), game.calls })
+    game.canSet[1436] = false
+    Env.fire("PLAYER_LEVEL_UP", 5)
+    emit("refused-map", { index(), game.calls, Env.ns.Waypoint.Mine() or false })
+    -- without the waypoint API the guide still works
+    Env.relog()
+    toawowcharDB = nil
+    C_Map.SetUserWaypoint, UiMapPoint = nil, nil
+    game.completed, game.log, game.map, game.level = {}, {}, 1429, 1
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    emit("no-api", { index(), shown() })
+
+elseif scenario == "combat" then
+    -- In combat no frame changes: show, hide and redraw wait for PLAYER_REGEN_ENABLED.
+    load()
+    login()
+    Env.combat = true
+    Env.slash("/wowchar guide")
+    emit("in-combat", { shown(), Env.frameNamed("toawowcharGuideFrame") ~= nil, toawowcharDB.guide.shown })
+    Env.combat = false
+    Env.fire("PLAYER_REGEN_ENABLED")
+    emit("after-combat", { shown() })
+    local before = frameText()[2]
+    Env.combat = true
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    emit("step-in-combat", { index(), frameText()[2] == before })
+    local f = Env.frameNamed("toawowcharGuideFrame")
+    f.moving = false
+    f.scripts.OnDragStart(f)
+    emit("drag-in-combat", { f.moving })
+    Env.slash("/wowchar guide")
+    emit("hide-in-combat", { shown() })
+    Env.combat = false
+    Env.fire("PLAYER_REGEN_ENABLED")
+    emit("hidden-after", { shown() })
+
+elseif scenario == "migration" then
+    -- dbVersion 1 (0.4.x: realms at the top) becomes 2; the cache survives; a newer file is left alone.
+    toawowcharDB = { Forever = { Thor = { v = 1, quests = { at = 1790000000, ids = { 3, 9 } } } }, ["Argent Dawn"] = { Thorin = { v = 1 } } }
+    load()
+    emit("migrated", { toawowcharDB.dbVersion, toawowcharDB.Forever == nil, toawowcharDB.realms.Forever.Thor.quests.ids, toawowcharDB.realms["Argent Dawn"] ~= nil })
+    Env.relog()
+    toawowcharDB = { dbVersion = 9, whatever = { 1 } }
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    emit("newer", { toawowcharDB.dbVersion, toawowcharDB.whatever, toawowcharDB.realms == nil, toawowcharDB.guide == nil })
+end

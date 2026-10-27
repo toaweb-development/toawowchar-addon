@@ -423,7 +423,62 @@ local function RealmName()
     return nil
 end
 
+---------------------------------------------------------------------------
+-- SavedVariables: toawowcharDB and its versions
+---------------------------------------------------------------------------
+-- dbVersion 1 (0.4.x, no dbVersion key): { [realm] = { [name] = cache record } }.
+-- dbVersion 2 (0.5.0):
+--   dbVersion   2
+--   realms      { [realm] = { [name] = cache record } }   the cache, as in version 1 (Cache.lua)
+--   guide       { shown, point, characters = { [realm] = { [name] = { route, generated, step,
+--                 skipped } } } }                         the leveling guide (Guide.lua)
+-- The migration from 1 moves every realm table under `realms`, so the cache survives the
+-- update. A table with a dbVersion this addon does not know (a newer addon wrote it) is left
+-- untouched: the addon then works on a table of this play session only, never on the file.
+local DB_VERSION = 2
+local sessionDB
+
+local function MigrateDB(db)
+    if db.dbVersion == nil then
+        local realms = {}
+        for key, value in pairs(db) do
+            realms[key] = value
+        end
+        for key in pairs(realms) do
+            db[key] = nil
+        end
+        db.realms = realms
+        db.dbVersion = 2
+    end
+end
+
+-- The saved table, migrated and with its parts present. Looked up on every call (never
+-- kept), because the client assigns the saved file's table after the files ran.
+local function DB()
+    if type(toawowcharDB) ~= "table" then
+        toawowcharDB = {}
+    end
+    local db = toawowcharDB
+    if db.dbVersion ~= DB_VERSION then
+        if db.dbVersion == nil then
+            MigrateDB(db)
+        else
+            sessionDB = sessionDB or { dbVersion = DB_VERSION }
+            db = sessionDB
+        end
+    end
+    if type(db.realms) ~= "table" then
+        db.realms = {}
+    end
+    if type(db.guide) ~= "table" then
+        db.guide = {}
+    end
+    return db
+end
+
 -- What the other files read from the namespace.
+ns.DB_VERSION = DB_VERSION
+ns.DB = DB
 ns.ADDON_VERSION = ADDON_VERSION
 ns.FORMAT_VERSION = FORMAT_VERSION
 ns.PREFIX = PREFIX
@@ -479,11 +534,12 @@ ns.RealmName = RealmName
 local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
-        if arg1 == addonName and type(toawowcharDB) ~= "table" then
+        if arg1 == addonName then
             -- The client has put the saved table in toawowcharDB by now, or left it
-            -- nil (nothing saved, or SavedVariables not kept): start with an empty one.
-            -- The character's record is looked up and checked when it is first needed.
-            toawowcharDB = {}
+            -- nil (nothing saved, or SavedVariables not kept): start with an empty one,
+            -- or migrate an older one (DB). The character's record is looked up and
+            -- checked when it is first needed.
+            DB()
         end
     elseif event == "BANKFRAME_OPENED" then
         session.bankOpen = true
@@ -555,6 +611,12 @@ local function Command(message)
     if word == "reset" then
         Cache.Reset()
         Say(L["RESET_DONE"])
+        return
+    end
+    -- /wowchar guide shows or hides the leveling guide; it holds its own frame changes back in
+    -- combat (UI/GuideWindow.lua), so it does not wait like the export does.
+    if word == "guide" then
+        ns.Guide.Toggle()
         return
     end
     -- In combat the game hides values from addons: wait until it ends.

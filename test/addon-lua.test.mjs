@@ -719,7 +719,7 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
       expect(exportOf(m, 'session1').sections.questsDone).toEqual({ source: 'live', at: 1792000000, ids: [10, 20, 30] })
       expect(exportOf(m, 'session2-empty').sections.questsDone).toEqual({ source: 'cache', at: 1792000000, ids: [10, 20, 30] })
       expect(exportOf(m, 'session2-filled').sections.questsDone).toEqual({ source: 'live', at: 1792000000 + 7200, ids: [10, 20, 30, 40] })
-      expect(json(m, 'db').Forever.Thor.quests.ids).toEqual([10, 20, 30, 40])
+      expect(json(m, 'db').realms.Forever.Thor.quests.ids).toEqual([10, 20, 30, 40])
       expect(decoded(m, 'session2-empty').sections .sources.questsDone).toEqual({ source: 'cache', at: 1792000000 })
     })
 
@@ -805,7 +805,7 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
 
     it('/wowchar reset clears this character: the cache is gone, the bank is not seen, one line is said', () => {
       expect(plain(m, 'chat-reset')).toEqual(['toawowchar: cleared the saved data of this character.'])
-      expect(json(m, 'db-after-reset')).toEqual({ Forever: [] })
+      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 2, guide: [], realms: { Forever: [] } })
       const j = exportOf(m, 'after-reset')
       expect(j.bank).toEqual([])
       expect(j.bankSeen).toBe(false)
@@ -1259,8 +1259,8 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
       const m = snap('reset')
       expect(json(m, 'scheduled')).toEqual([1])
       expect(json(m, 'before-reset')).toEqual([1])
-      expect(json(m, 'db-after-reset')).toEqual({ Forever: [] })
-      expect(json(m, 'db-after-timer')).toEqual({ Forever: [] })
+      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 2, guide: [], realms: { Forever: [] } })
+      expect(json(m, 'db-after-timer')).toEqual({ dbVersion: 2, guide: [], realms: { Forever: [] } })
       expect(plain(m, 'chat')).toEqual(['toawowchar: cleared the saved data of this character.'])
       expect(json(m, 'fresh')).toEqual([1, 1]) // the next event starts fresh, not throttled
     })

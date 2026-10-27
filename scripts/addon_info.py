@@ -21,10 +21,13 @@ ZIP_FILES = (
     "Core.lua",
     "Data/Routes.lua",
     "Export.lua",
+    "Guide.lua",
     "Locales/enUS.lua",
     "README.md",
     "Serializer.lua",
+    "UI/GuideWindow.lua",
     "UI/Window.lua",
+    "Waypoint.lua",
     f"{FOLDER}.toc",
 )
 

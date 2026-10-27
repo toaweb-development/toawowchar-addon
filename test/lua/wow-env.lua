@@ -106,6 +106,13 @@ frameMethods.SetText = function(self, text)
 end
 frameMethods.GetText = function(self) return self.text or "" end
 frameMethods.SetPoint = function(self, ...) self.points[#self.points + 1] = { ... } end
+frameMethods.ClearAllPoints = function(self) self.points = {} end
+-- GetPoint(1): the first anchor, as SetPoint(point, relativeTo, relativePoint, x, y) gave it.
+frameMethods.GetPoint = function(self)
+    local p = self.points[1]
+    if not p then return nil end
+    return p[1], p[2], p[3], p[4], p[5]
+end
 frameMethods.SetSize = function(self, w, h) self.width, self.height = w, h end
 frameMethods.SetWidth = function(self, w) self.width = w end
 frameMethods.SetHeight = function(self, h) self.height = h end

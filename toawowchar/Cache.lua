@@ -27,6 +27,7 @@ local SortedKeys = ns.SortedKeys
 local CleanCount = ns.CleanCount
 local Points = ns.Points
 local RealmName = ns.RealmName
+local DB = ns.DB
 local CollectEquipped = ns.CollectEquipped
 local CollectBags = ns.CollectBags
 local CollectProfessions = ns.CollectProfessions
@@ -34,7 +35,7 @@ local Section = ns.Section
 local StorePlayer = ns.StorePlayer
 
 ---------------------------------------------------------------------------
--- Cache (SavedVariables: toawowcharDB[realm][name])
+-- Cache (SavedVariables: toawowcharDB.realms[realm][name], see DB in Core.lua)
 ---------------------------------------------------------------------------
 -- The table is only a cache. The addon never needs it: when toawowcharDB is
 -- nil or not a table, or when the client does not save it, everything below works
@@ -324,7 +325,7 @@ function Cache.Clean(raw)
 end
 
 -- This character's record. Always a table: a play-session table when the saved
--- one cannot be used. The saved variable is looked up on every call (never kept),
+-- one cannot be used. The saved variable is looked up on every call (DB, never kept),
 -- because the client assigns the saved file's table after this file ran.
 function Cache.Get()
     local name = UnitName and UnitName("player")
@@ -332,14 +333,12 @@ function Cache.Get()
         fallbackRecord = fallbackRecord or Cache.Clean(nil)
         return fallbackRecord
     end
-    if type(toawowcharDB) ~= "table" then
-        toawowcharDB = {}
-    end
+    local db = DB()
     local realm = RealmName() or "?"
-    local realms = toawowcharDB[realm]
+    local realms = db.realms[realm]
     if type(realms) ~= "table" then
         realms = {}
-        toawowcharDB[realm] = realms
+        db.realms[realm] = realms
     end
     local rec = realms[name]
     if type(rec) ~= "table" or not checked[rec] then
@@ -354,8 +353,8 @@ end
 -- play session.
 function Cache.Reset()
     local name = UnitName and UnitName("player")
-    if type(name) == "string" and name ~= "" and type(toawowcharDB) == "table" then
-        local realms = toawowcharDB[RealmName() or "?"]
+    if type(name) == "string" and name ~= "" then
+        local realms = DB().realms[RealmName() or "?"]
         if type(realms) == "table" then
             realms[name] = nil
         end

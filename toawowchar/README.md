@@ -2,6 +2,8 @@
 
 A small, free addon for World of Warcraft: Forever. It makes a text string of what your character has and has done, so you can paste it at [wowchar](https://wowchar.toaweb.com): on «My characters» to add the character, or on the character's BiS page to mark the BiS items you already have as obtained.
 
+It also has a **leveling guide** (`/wowchar guide`): a small window with the next steps of a leveling route from wowchar for your race, with the game's own waypoint on each step. See «The leveling guide».
+
 The text holds who the character is, the equipped items, the bags, the bank and the warband bank, the professions and their recipes, the completed quests and the quest log, reputation, gold and XP, talents, Legacy, the flight paths, the season's PvP rank and the class spells you know.
 
 ## What it does and does not do
@@ -11,6 +13,7 @@ The text holds who the character is, the equipped items, the bags, the bank and 
 - Saves a **cache** to disk (SavedVariables `toawowcharDB`): what the game lets an addon read only while a window is open, plus the completed quests, Legacy and the snapshot. It is only a cache: the addon works the same when nothing was saved, or when the game does not keep the file. See «The cache».
 - Says one short line in the chat window when it has cached something new («toawowchar: saved 212 Tailoring recipes.»), one when you type `/wowchar` in combat, and one for `/wowchar reset`. Nothing else.
 - Plain Lua, no libraries. Free.
+- The leveling routes come with the addon (`Data/Routes.lua`, made from wowchar's route list when the addon is released). The addon does not fetch anything.
 
 ## Install
 
@@ -43,6 +46,20 @@ A frame made from Blizzard's own templates, 620 by 470, centred, in wowchar's co
 - The export text, selected and ready for Ctrl+C. Under it the size in characters and KB.
 - The buttons «Select all» and «Close», and the line «Paste it on wowchar.toaweb.com > My characters».
 
+## The leveling guide
+
+Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers whether it was shown, where you dragged it and where you are on the route, per character.
+
+- **The route** is the one for your race, as wowchar shows it on its Routes page: Human; Dwarf and Gnome; Night Elf; Orc and Troll; Undead; Tauren; High Order Skyborne; Windshaper Skyborne. It runs from level 1 to 40 through the zones in wowchar's plan. The two Skyborne routes say **«unconfirmed start»**: where they start and the order after Zephras Isle are wowchar's assumptions until Forever is out. A race with no route gets a short message instead. Which race names the game gives the two Skyborne races is not known yet; the addon takes any race with «Skyborne» in its name and picks the route of your faction.
+- **The window** shows the current step and the next two: what to do (accept, do the objectives, turn in, travel, grind), the quests, who to talk to, and a `/way` line with the zone, the coordinates and the level the route expects there (an estimate). Buttons: «Back», «Skip», «Hide». Drag it anywhere.
+- **Where you are.** At login and `/reload` the guide goes to the first step whose quests are not all done (accepted, objectives done, or turned in, as the step needs); if a travel or grind step comes right before it and is not done yet, it starts there.
+- **It moves on by itself**: an accept step when the quests are in your quest log, an objective step when the objectives it is about are done, a turn-in when the quests are turned in, a travel step when you are in its zone, a grind step when you reach the next step's level.
+- **«Skip»** passes a step you do not want (it is remembered). **«Back»** shows the step before and stays there until you press «Skip».
+- **The waypoint.** While the guide is shown, each step puts the game's own map waypoint on its place and tracks it, so the game shows its navigation marker and the arrow at the edge of the screen. A travel step points at the middle of the zone; a grind step has none. «Hide» removes the waypoint, but only the one the guide set: a waypoint you placed yourself stays.
+- **In combat** the window does not change (the game protects frames in combat); it catches up when combat ends.
+
+**Not tested in a real client yet:** the guide is new in 0.5.0 and was checked only in the tests, with a stand-in for the game. The waypoint, the navigation marker and the race names of the two Skyborne races in particular have not been seen in Forever.
+
 ## What is in the text
 
 The text starts with `WOWCHAR:3:` and then plain, readable JSON (format 3). It is not compressed or encoded, so you can read it, and it contains no `|`, which the game would treat as the start of a colour code or link.
@@ -71,7 +88,7 @@ The rest is the character data wowchar uses to show what fits your character:
 
 ## The cache
 
-SavedVariables `toawowcharDB[realm][name]` holds, for each character:
+SavedVariables `toawowcharDB` has a version (`dbVersion`, 2 since 0.5.0). The cache is `toawowcharDB.realms[realm][name]`; the guide's window and each character's place on the route are in `toawowcharDB.guide`. A file from 0.4.x is moved into this layout the first time 0.5.0 loads it, so nothing is lost; a file written by a newer version than yours is not touched (the addon then keeps everything in memory for that play session only). The cache holds, for each character:
 
 | Saved | Merged or replaced | Time |
 |---|---|---|

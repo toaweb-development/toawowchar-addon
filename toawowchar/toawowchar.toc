@@ -11,3 +11,6 @@ Export.lua
 Cache.lua
 UI\Window.lua
 Data\Routes.lua
+Waypoint.lua
+Guide.lua
+UI\GuideWindow.lua

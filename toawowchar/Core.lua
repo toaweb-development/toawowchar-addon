@@ -554,19 +554,27 @@ end
 -- SavedVariables: toawowcharDB and its versions
 ---------------------------------------------------------------------------
 -- dbVersion 1 (0.4.x, no dbVersion key): { [realm] = { [name] = cache record } }.
--- dbVersion 2 (0.5.0):
+-- dbVersion 2 (0.5.0 before quest data collection):
 --   dbVersion   2
 --   realms      { [realm] = { [name] = cache record } }   the cache, as in version 1 (Cache.lua)
 --   guide       { shown, point, characters = { [realm] = { [name] = { route, generated, step,
 --                 skipped } } } }                         the leveling guide (Guide.lua)
--- The migration from 1 moves every realm table under `realms`, so the cache survives the
--- update. A table with a dbVersion this addon does not know (a newer addon wrote it) is left
--- untouched: the addon then works on a table of this play session only, never on the file.
-local DB_VERSION = 2
+-- dbVersion 3 (0.5.0):
+--   as 2, plus
+--   settings    { collect = true, guideAtLogin = false }   the settings panel (UI/Settings.lua)
+--   observed    { quests = { [questID] = record }, npcs = { [npcID] = record } }
+--                                                       quest data seen in play (Collect.lua)
+-- Each migration runs in order (1 -> 2 -> 3), so every older file arrives at 3. The one from 1
+-- moves every realm table under `realms`, so the cache survives the update; the one from 2
+-- adds the empty `settings` and `observed`. A table with a dbVersion this addon does not know
+-- (a newer addon wrote it) is left untouched: the addon then works on a table of this play
+-- session only, never on the file.
+local DB_VERSION = 3
 local sessionDB
 
-local function MigrateDB(db)
-    if db.dbVersion == nil then
+local MIGRATIONS = {
+    -- nil -> 2
+    [0] = function(db)
         local realms = {}
         for key, value in pairs(db) do
             realms[key] = value
@@ -576,6 +584,27 @@ local function MigrateDB(db)
         end
         db.realms = realms
         db.dbVersion = 2
+    end,
+    -- 2 -> 3
+    [2] = function(db)
+        db.settings = { collect = true, guideAtLogin = false }
+        db.observed = { quests = {}, npcs = {} }
+        db.dbVersion = 3
+    end,
+}
+
+-- True when the table is one this addon can bring to DB_VERSION.
+local function Known(db)
+    return db.dbVersion == nil or db.dbVersion == DB_VERSION or MIGRATIONS[db.dbVersion] ~= nil
+end
+
+local function MigrateDB(db)
+    while db.dbVersion ~= DB_VERSION do
+        local step = MIGRATIONS[db.dbVersion or 0]
+        if not step then
+            return
+        end
+        step(db)
     end
 end
 
@@ -587,7 +616,7 @@ local function DB()
     end
     local db = toawowcharDB
     if db.dbVersion ~= DB_VERSION then
-        if db.dbVersion == nil then
+        if Known(db) then
             MigrateDB(db)
         else
             sessionDB = sessionDB or { dbVersion = DB_VERSION }
@@ -599,6 +628,24 @@ local function DB()
     end
     if type(db.guide) ~= "table" then
         db.guide = {}
+    end
+    if type(db.settings) ~= "table" then
+        db.settings = {}
+    end
+    if type(db.settings.collect) ~= "boolean" then
+        db.settings.collect = true
+    end
+    if type(db.settings.guideAtLogin) ~= "boolean" then
+        db.settings.guideAtLogin = false
+    end
+    if type(db.observed) ~= "table" then
+        db.observed = {}
+    end
+    if type(db.observed.quests) ~= "table" then
+        db.observed.quests = {}
+    end
+    if type(db.observed.npcs) ~= "table" then
+        db.observed.npcs = {}
     end
     return db
 end

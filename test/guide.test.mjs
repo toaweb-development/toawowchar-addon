@@ -376,9 +376,13 @@ describe('the export and the cache do not depend on the guide', () => {
   })
 })
 
-describe('SavedVariables dbVersion 2', () => {
-  it('migrates 0.4.x\'s table (realms at the top) under realms, keeping the cache', () => {
-    expect(get('migration', 'migrated')).toEqual([2, true, [3, 9], true])
+describe('SavedVariables dbVersion 3', () => {
+  it('migrates 0.4.x\'s table (realms at the top) under realms, keeping the cache, and on to 3', () => {
+    expect(get('migration', 'migrated')).toEqual([3, true, [3, 9], true])
+  })
+
+  it('migrates dbVersion 2 to 3: the settings with their defaults and an empty observed table; cache and guide kept', () => {
+    expect(get('migration', 'from-2')).toEqual([3, [3, 9], 4, true, false, true, true])
   })
 
   it('leaves a table with a newer dbVersion untouched and works on a table of this session', () => {

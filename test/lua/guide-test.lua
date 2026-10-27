@@ -756,4 +756,18 @@ elseif scenario == "migration" then
     login()
     Env.slash("/wowchar guide")
     emit("newer", { toawowcharDB.dbVersion, toawowcharDB.whatever, toawowcharDB.realms == nil, toawowcharDB.guide == nil })
+    -- dbVersion 2 (0.5.0 before collection) becomes 3: settings with their defaults, an empty
+    -- observed table; the cache and the guide are kept as they are
+    Env.relog()
+    toawowcharDB = {
+        dbVersion = 2,
+        realms = { Forever = { Thor = { v = 1, quests = { at = 1790000000, ids = { 3, 9 } } } } },
+        guide = { shown = true, characters = { Forever = { Thor = { route = "human", step = 4 } } } },
+    }
+    load()
+    emit("from-2", {
+        toawowcharDB.dbVersion, toawowcharDB.realms.Forever.Thor.quests.ids, toawowcharDB.guide.characters.Forever.Thor.step,
+        toawowcharDB.settings.collect, toawowcharDB.settings.guideAtLogin,
+        next(toawowcharDB.observed.quests) == nil, next(toawowcharDB.observed.npcs) == nil,
+    })
 end

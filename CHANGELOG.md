@@ -11,9 +11,10 @@ Versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 A leveling guide. The export text is unchanged (format 3, the same bytes as 0.4.1 for the same game).
 
 ### Added
-- `/wowchar guide` shows or hides the leveling guide: a small movable window with the current step
-  of the character's route and the next two, each with a `/way` line (zone, coordinates, the level
-  the route expects), and the buttons «Back», «Skip» and «Hide». The route is the one of the
+- `/wowchar guide` shows or hides the leveling guide: a small movable panel with the current step
+  of the character's route (an icon for its kind, the quest, the NPC, the quest log's objective
+  lines, the coordinates and the distance to the waypoint) and the next two on one line each, a
+  progress bar, and small buttons for «Back», «Skip» and «Hide». The route is the one of the
   character's race; the two Skyborne routes say «unconfirmed start».
 - At login and `/reload` the guide goes to the first step whose quests are not all done. It moves on
   by itself: accept steps on `QUEST_ACCEPTED`, objective steps when the objectives are done, turn-ins

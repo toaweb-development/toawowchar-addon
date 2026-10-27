@@ -50,13 +50,17 @@ A frame made from Blizzard's own templates, 620 by 470, centred, in wowchar's co
 
 Type `/wowchar guide` (or `/toawowchar guide`) to show or hide it. It remembers whether it was shown, where you dragged it and where you are on the route, per character.
 
-- **The route** is the one for your race, as wowchar shows it on its Routes page: Human; Dwarf and Gnome; Night Elf; Orc and Troll; Undead; Tauren; High Order Skyborne; Windshaper Skyborne. It runs from level 1 to 40 through the zones in wowchar's plan. The two Skyborne routes say **«unconfirmed start»**: where they start and the order after Zephras Isle are wowchar's assumptions until Forever is out. A race with no route gets a short message instead. Which race names the game gives the two Skyborne races is not known yet; the addon takes any race with «Skyborne» in its name and picks the route of your faction.
-- **The window** shows the current step and the next two: what to do (accept, do the objectives, turn in, travel, grind), the quests, who to talk to, and a `/way` line with the zone, the coordinates and the level the route expects there (an estimate). Buttons: «Back», «Skip», «Hide». Drag it anywhere.
+- **The route** is the one for your race, as wowchar shows it on its Routes page: Human; Dwarf and Gnome; Night Elf; Orc and Troll; Undead; Tauren; High Order Skyborne; Windshaper Skyborne. It runs from level 1 to 40 through the zones in wowchar's plan. The two Skyborne routes have an orange line, **«Unconfirmed start. Zephras Isle is our best guess until launch.»**: where they start and the order after Zephras Isle are wowchar's assumptions until Forever is out. A race with no route gets a short message instead. Which race names the game gives the two Skyborne races is not known yet; the addon takes any race with «Skyborne» in its name and picks the route of your faction.
+- **The window** is a small dark panel, 300 pixels wide; its height follows what it shows. Drag it anywhere; it stays on the screen.
+  - The top line has a square in your class colour, the route's name, the step count («5 / 870») and three small buttons: back, skip and hide (hover for the word).
+  - Under it: where you are (subzone · zone) and your level.
+  - The current step, with an icon for its kind (a yellow «!» to accept, a yellow «?» to turn in, a gold marker for objectives, a blue arrow to travel, swords to grind). It shows the kind, the quest, the NPC (or the objective), and for objectives and turn-ins one line per objective from your quest log («• Kobold Vermin slain: 4/10», a green check when done). Under that come the coordinates and the distance to the waypoint in yards. A travel step says «The guide moves on when you arrive»; a grind step shows the XP the route expects and a bar to the target level.
+  - The next two steps, one line each, and a thin bar for how far you are through the route.
 - **Where you are.** At login and `/reload` the guide goes to the first step whose quests are not all done (accepted, objectives done, or turned in, as the step needs); if a travel or grind step comes right before it and is not done yet, it starts there.
 - **It moves on by itself**: an accept step when the quests are in your quest log, an objective step when the objectives it is about are done, a turn-in when the quests are turned in, a travel step when you are in its zone, a grind step when you reach the next step's level.
 - **«Skip»** passes a step you do not want (it is remembered). **«Back»** shows the step before and stays there until you press «Skip».
 - **The waypoint.** While the guide is shown, each step puts the game's own map waypoint on its place and tracks it, so the game shows its navigation marker and the arrow at the edge of the screen. Travel and grind steps point at the middle of their zone. «Hide» removes the waypoint, but only the one the guide set: a waypoint you placed yourself stays.
-- **In combat** the window does not change (the game protects frames in combat); it catches up when combat ends.
+- **In combat** the window keeps its layout and the coordinate line says «In combat: updates when combat ends»; it catches up when combat ends.
 
 **If the guide hits an error** it says so in one chat line («toawowchar: the guide hit an error and is turned off for this session: …»), hides, and stays off until `/reload`. The same goes for the waypoint alone: the guide then goes on without it. The export (`/wowchar`) and the saved data keep working either way.
 
@@ -136,7 +140,7 @@ In wowchar, bank items and warband bank items count as obtained only when the te
 
 ## What is new
 
-**0.5.0.** A leveling guide: `/wowchar guide` shows the next steps of wowchar's leveling route for your race (levels 1 to 40), with `/way` lines, «Back», «Skip» and «Hide», and puts the game's own waypoint on each step. The routes come with the addon. The saved file gets a version (`dbVersion` 2); a 0.4.x file is moved over without losing anything. The export text is the same as in 0.4.1.
+**0.5.0.** A leveling guide: `/wowchar guide` shows the next steps of wowchar's leveling route for your race (levels 1 to 40), in a small panel with «Back», «Skip» and «Hide», and puts the game's own waypoint on each step. The routes come with the addon. The saved file gets a version (`dbVersion` 2); a 0.4.x file is moved over without losing anything. The export text is the same as in 0.4.1.
 
 **0.4.1.** The first release made from the addon's own repository, `toaweb/toawowchar-addon`. The code is the same as 0.4.0; one wrong comment about the Legacy cache was corrected.
 

@@ -64,7 +64,7 @@ local function IsMine()
         return false
     end
     if not (C_Map.HasUserWaypoint and C_Map.GetUserWaypoint) then
-        return true -- the game cannot say; it is the one set last
+        return false -- the game cannot say whose it is: leave it
     end
     local okHas, has = pcall(C_Map.HasUserWaypoint)
     if not okHas or not has then

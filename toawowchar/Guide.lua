@@ -536,7 +536,8 @@ local function List(names)
     return string.format(L["LIST_AND"], table.concat(names, ", ", 1, #names - 1), names[#names])
 end
 
-local MAX_LINE = 160
+-- A step's text is cut here (about three lines in the window).
+local MAX_LINE = 110
 
 -- The words of a step: what to do, and the /way line under it.
 function Guide.StepText(step)

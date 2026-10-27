@@ -52,7 +52,8 @@
 -- the races: the Forever tokens for the two new races are not confirmed.
 --
 -- API facts the addon relies on (Gethe/wow-ui-source, branch forever, 172a387,
--- build 1.60.1.70450; nothing was run in a live client; the Blizzard_APIDocumentationGenerated
+-- build 1.60.1.70450, and for the guide ca8368f, build 1.60.1.70532, where none of
+-- these changed; nothing was run in a live client; the Blizzard_APIDocumentationGenerated
 -- paths are meant): QuestLogDocumentation.lua, ReputationInfoDocumentation.lua,
 -- SharedTraitsDocumentation.lua, ClassTalentsDocumentation.lua, TaxiMapDocumentation.lua,
 -- TradeSkillUIDocumentation.lua, SpellBookDocumentation.lua, MajorFactionsDocumentation.lua,

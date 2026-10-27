@@ -25,8 +25,9 @@ local Waypoint = ns.Waypoint
 local GuideWindow = {}
 ns.GuideWindow = GuideWindow
 
-local WIDTH, HEIGHT = 330, 196
-local ROW_HEIGHT = 40
+local WIDTH, HEIGHT = 330, 250
+-- Space between two rows (each row is anchored under the one before, so a long one pushes the next down).
+local ROW_GAP = 6
 local COLOR_ACCENT, COLOR_PRIMARY, COLOR_HINT, COLOR_WARN = "ff5FD4E6", "ff8B7CFF", "ff9A97B8", "ffFF7A8A"
 
 local KIND_LABELS = {
@@ -86,9 +87,10 @@ local function Button(parent, label, anchor, x, onClick)
 end
 
 local function Create()
-    local ok, f = pcall(CreateFrame, "Frame", "toawowcharGuideFrame", UIParent, "BackdropTemplate")
+    -- No global name: nothing needs one (docs/wow-addon-rules.md 4).
+    local ok, f = pcall(CreateFrame, "Frame", nil, UIParent, "BackdropTemplate")
     if not ok or type(f) ~= "table" then
-        f = CreateFrame("Frame", "toawowcharGuideFrame", UIParent)
+        f = CreateFrame("Frame", nil, UIParent)
     end
     f:SetSize(WIDTH, HEIGHT)
     f:SetFrameStrata("MEDIUM")
@@ -130,7 +132,11 @@ local function Create()
     widgets.rows = {}
     for i = 1, Guide.SHOWN do
         local row = f:CreateFontString(nil, "ARTWORK", i == 1 and "GameFontHighlight" or "GameFontHighlightSmall")
-        row:SetPoint("TOPLEFT", 12, -32 - (i - 1) * ROW_HEIGHT)
+        if i == 1 then
+            row:SetPoint("TOPLEFT", 12, -32)
+        else
+            row:SetPoint("TOPLEFT", widgets.rows[i - 1], "BOTTOMLEFT", 0, -ROW_GAP)
+        end
         row:SetWidth(WIDTH - 24)
         row:SetJustifyH("LEFT")
         row:SetWordWrap(true)
@@ -182,12 +188,12 @@ local function Draw()
     widgets.message:SetText(view.message or "")
 end
 
--- The waypoint follows the current step while the guide is meant to be shown: the step's
--- place for accept, objective, turn-in and travel (the middle of the zone to go to); none for
--- grind and none when the route is done.
+-- The waypoint follows the current step while the guide is meant to be shown: every step has
+-- one at its place (travel and grind steps: the middle of their zone); none when the route is
+-- done. A map the game refuses leaves no old marker behind: the guide's own is cleared.
 local function UpdateWaypoint()
     local step = Guide.Current()
-    if not (Saved().shown == true and step) or step[1] == Guide.KINDS.grind then
+    if not (Saved().shown == true and step) then
         if waypointStep then
             Waypoint.Clear()
             waypointStep = nil
@@ -197,7 +203,9 @@ local function UpdateWaypoint()
     local index = Guide.state.index
     if waypointStep ~= index then
         waypointStep = index
-        Waypoint.Set(step[2], step[3], step[4])
+        if not Waypoint.Set(step[2], step[3], step[4]) then
+            Waypoint.Clear()
+        end
     end
 end
 

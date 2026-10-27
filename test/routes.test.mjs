@@ -129,6 +129,10 @@ describe('scripts/fetch-routes.py', () => {
     ['steps that do not match stepCount', a => { a.human.steps.pop() }, 'not a list of stepCount steps'],
     ['a route that differs from the index', a => { a.human.route.confirmed = false }, 'confirmed differs from /api/routes'],
     ['a quest step without a quest', a => { a.human.steps[0].questIds = [] }, 'a accept step has no quest'],
+    ['a zone listed twice', a => { a.human.zones.push({ id: 12, name: 'Elwynn', uiMapId: 9999 }) }, 'zone 12 is listed twice'],
+    ['a quest listed twice', a => { a.human.quests.push({ id: 33, name: 'Other', level: 1 }) }, 'quest 33 is listed twice'],
+    ['a kind that is not a text', a => { a.human.steps[0].kind = ['accept'] }, 'is not known'],
+    ['a time with other digits', a => { a.index.routes[1].generatedAt = '２026-10-27T06:00:43Z' }, 'generatedAt is not an ISO time'],
   ])('refuses %s and writes nothing', (_, change, message) => {
     const file = join(temp(), 'Routes.lua')
     const r = fetchRoutes('--from-dir', apiDir(change), '--out', file)
@@ -138,13 +142,14 @@ describe('scripts/fetch-routes.py', () => {
     expect(existsSync(file)).toBe(false)
   })
 
-  it('--uimap lists every uiMapId the client\'s UiMap table does not have, and fails', () => {
+  it('--uimap lists every uiMapId the client\'s UiMap table does not have, fails and writes nothing', () => {
     const dir = temp()
     const csv = join(dir, 'uimap.csv')
-    writeFileSync(csv, 'Name_lang,ID,ParentUiMapID\nElwynn Forest,1429,1415\nDurotar,1411,1414\n')
+    writeFileSync(csv, 'Name_lang,ID,ParentUiMapID\nElwynn Forest,1429,1415\nDurotar,1411,1414\nshort\n')
     const r = fetchRoutes('--from-dir', apiDir(), '--out', join(dir, 'Routes.lua'), '--uimap', csv)
     expect(r.status).toBe(1)
-    expect(r.stderr).toBe('uiMapId 1436 (Westfall) is not in uimap.csv\n')
+    expect(r.stderr).toBe('uiMapId 1436 (Westfall) is not in uimap.csv\nerror: a map id the client does not have; nothing was written\n')
+    expect(existsSync(join(dir, 'Routes.lua'))).toBe(false)
     expect(r.stdout).toContain('uiMapId check: 2 ids, 1 in uimap.csv, 1 missing')
     writeFileSync(csv, 'Name_lang,ID\nElwynn Forest,1429\nWestfall,1436\n')
     expect(fetchRoutes('--from-dir', apiDir(), '--out', join(dir, 'Routes.lua'), '--uimap', csv).status).toBe(0)

@@ -8,7 +8,8 @@
     --from-dir DIR                                read index.json and <start>.json from DIR instead of
                                                   the network (the tests use it)
     --out FILE                                    write somewhere else (default: the addon's Data/)
-    --save-dir DIR                                also keep the raw answers there
+    --save-dir DIR                                also keep the raw answers there (written as they
+                                                  come, before they are checked: for debugging only)
 
 The answers are checked strictly against the shape wowchar's app/server/api/routes/ returns (the
 types in its app/shared/routes.ts). One thing out of place stops the script and writes nothing:
@@ -106,7 +107,7 @@ def check_meta(meta, what):
     need(meta.get("faction") in ("A", "H"), f"{what}: faction is not A or H")
     need(isinstance(meta.get("confirmed"), bool), f"{what}: confirmed is not true or false")
     text(meta.get("questieVersion"), 100, f"{what}: questieVersion")
-    need(isinstance(meta.get("generatedAt"), str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z", meta["generatedAt"]),
+    need(isinstance(meta.get("generatedAt"), str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z", meta["generatedAt"]),
          f"{what}: generatedAt is not an ISO time in UTC")
     need(is_int(meta.get("stepCount"), 0, MAX_STEPS), f"{what}: stepCount is not 0 to {MAX_STEPS}")
     need(is_int(meta.get("levelEnd"), 1, MAX_LEVEL), f"{what}: levelEnd is not 1 to {MAX_LEVEL}")
@@ -127,7 +128,9 @@ def check_route(key, data, index_meta):
     zone_names = {}
     for z in zones:
         need(isinstance(z, dict) and is_int(z.get("id"), 1, MAX_ID), f"{what}: a zone has no id")
+        need(z["id"] not in ui_map, f"{what}: zone {z['id']} is listed twice")
         need(is_int(z.get("uiMapId"), 1, MAX_ID), f"{what}: zone {z['id']} has no uiMapId")
+        need(z["uiMapId"] not in zone_names, f"{what}: uiMapId {z['uiMapId']} is listed twice")
         ui_map[z["id"]] = z["uiMapId"]
         zone_names[z["uiMapId"]] = text(z.get("name"), MAX_NAME, f"{what}: the name of zone {z['id']}")
 
@@ -136,6 +139,7 @@ def check_route(key, data, index_meta):
     quest_names = {}
     for q in quests:
         need(isinstance(q, dict) and is_int(q.get("id"), 1, MAX_ID), f"{what}: a quest has no id")
+        need(q["id"] not in quest_names, f"{what}: quest {q['id']} is listed twice")
         quest_names[q["id"]] = text(q.get("name"), MAX_NAME, f"{what}: the name of quest {q['id']}")
 
     steps = data.get("steps")
@@ -144,8 +148,8 @@ def check_route(key, data, index_meta):
     for i, s in enumerate(steps, start=1):
         at = f"{what} step {i}"
         need(isinstance(s, dict) and s.get("n") == i, f"{at}: n is not {i}")
-        need(s.get("kind") in KINDS, f"{at}: kind {s.get('kind')!r} is not known")
-        need(s.get("mapId") in ui_map, f"{at}: mapId {s.get('mapId')!r} is not in zones")
+        need(isinstance(s.get("kind"), str) and s["kind"] in KINDS, f"{at}: kind {s.get('kind')!r} is not known")
+        need(is_int(s.get("mapId"), 1, MAX_ID) and s["mapId"] in ui_map, f"{at}: mapId {s.get('mapId')!r} is not in zones")
         need(is_num(s.get("x"), 0, 100) and is_num(s.get("y"), 0, 100), f"{at}: x and y are not 0 to 100")
         ids = s.get("questIds")
         need(isinstance(ids, list) and len(ids) <= MAX_QUESTS_PER_STEP and all(is_int(q, 1, MAX_ID) for q in ids),
@@ -260,7 +264,7 @@ def uimap_ids(path):
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         need("ID" in (reader.fieldnames or []), f"{path} has no ID column")
-        return {int(row["ID"]) for row in reader if row["ID"].strip().isdigit()}
+        return {int(row["ID"]) for row in reader if (row.get("ID") or "").strip().isascii() and (row.get("ID") or "").strip().isdigit()}
 
 
 def main(argv=None):
@@ -274,24 +278,28 @@ def main(argv=None):
     try:
         routes, quests, zones = collect(args.from_dir or BASE, args.save_dir)
         lua, maps = render(routes, quests, zones)
-    except (Bad, ValueError, OSError) as error:
+        body = lua.encode("utf-8")
+        absent = []
+        if args.uimap:
+            known = uimap_ids(args.uimap)
+            absent = [m for m in maps if m not in known]
+    except (Bad, ValueError, OSError, UnicodeError) as error:
         print(f"error: {error}; nothing was written", file=sys.stderr)
         return 1
 
-    problems = 0
     if args.uimap:
-        known = uimap_ids(args.uimap)
-        absent = [m for m in maps if m not in known]
         for m in absent:
             print(f"uiMapId {m} ({zones[m]}) is not in {args.uimap.name}", file=sys.stderr)
         print(f"uiMapId check: {len(maps)} ids, {len(maps) - len(absent)} in {args.uimap.name}" + (f", {len(absent)} missing" if absent else ""))
-        problems = len(absent)
+        if absent:
+            print("error: a map id the client does not have; nothing was written", file=sys.stderr)
+            return 1
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_bytes(lua.encode("utf-8"))
+    args.out.write_bytes(body)
     steps = sum(len(s) for _, s in routes.values())
-    print(f"{args.out.name}: {len(routes)} routes, {steps} steps, {len(quests)} quests, {len(lua.encode('utf-8'))} bytes")
-    return 1 if problems else 0
+    print(f"{args.out.name}: {len(routes)} routes, {steps} steps, {len(quests)} quests, {len(body)} bytes")
+    return 0
 
 
 if __name__ == "__main__":

@@ -133,7 +133,7 @@ local G = function() return Env.ns.Guide end
 local function index() return G().state.index end
 
 local function frameText()
-    local f = Env.frameNamed("toawowcharGuideFrame")
+    local f = Env.ns.GuideWindow.Frame()
     local lines = {}
     if not f then return lines end
     for _, fs in ipairs(Env.fontStrings) do
@@ -143,7 +143,7 @@ local function frameText()
 end
 
 local function shown()
-    local f = Env.frameNamed("toawowcharGuideFrame")
+    local f = Env.ns.GuideWindow.Frame()
     return f ~= nil and f.shown == true
 end
 
@@ -275,7 +275,7 @@ elseif scenario == "buttons" then
     load()
     login()
     Env.slash("/wowchar guide")
-    local f = Env.frameNamed("toawowcharGuideFrame")
+    local f = Env.ns.GuideWindow.Frame()
     local buttons = {}
     for _, child in ipairs(Env.frames) do
         if child.parent == f and child.kind == "Button" then buttons[child.text] = child end
@@ -309,7 +309,7 @@ elseif scenario == "buttons" then
     -- Hide: the window goes, shown = false is saved
     Env.slash("/wowchar guide")
     Env.slash("/wowchar guide")
-    local f2 = Env.frameNamed("toawowcharGuideFrame")
+    local f2 = Env.ns.GuideWindow.Frame()
     local hide
     for _, child in ipairs(Env.frames) do
         if child.parent == f2 and child.kind == "Button" and child.text == "Hide" then hide = child end
@@ -325,7 +325,7 @@ elseif scenario == "window" then
     Env.slash("/wowchar guide")
     emit("after-command", { shown(), toawowcharDB.guide.shown })
     emit("text", frameText())
-    local f = Env.frameNamed("toawowcharGuideFrame")
+    local f = Env.ns.GuideWindow.Frame()
     f.scripts.OnDragStart(f)
     f:ClearAllPoints()
     f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", 120.4, 640.6)
@@ -336,7 +336,7 @@ elseif scenario == "window" then
     toawowcharDB = saved
     load()
     login()
-    local g = Env.frameNamed("toawowcharGuideFrame")
+    local g = Env.ns.GuideWindow.Frame()
     emit("relog", { shown(), g.points[1][1], g.points[1][3], g.points[1][4], g.points[1][5] })
     -- a damaged point puts it at the default place
     toawowcharDB.guide.point = { "NOWHERE", "TOP", 1, 2 }
@@ -344,7 +344,7 @@ elseif scenario == "window" then
     toawowcharDB = saved
     load()
     login()
-    emit("damaged-point", { Env.frameNamed("toawowcharGuideFrame").points[1][1] })
+    emit("damaged-point", { Env.ns.GuideWindow.Frame().points[1][1] })
     -- /wowchar guide twice: hidden again
     Env.slash("/wowchar guide")
     emit("toggled", { shown(), toawowcharDB.guide.shown })
@@ -396,7 +396,7 @@ elseif scenario == "combat" then
     login()
     Env.combat = true
     Env.slash("/wowchar guide")
-    emit("in-combat", { shown(), Env.frameNamed("toawowcharGuideFrame") ~= nil, toawowcharDB.guide.shown })
+    emit("in-combat", { shown(), Env.ns.GuideWindow.Frame() ~= nil, toawowcharDB.guide.shown })
     Env.combat = false
     Env.fire("PLAYER_REGEN_ENABLED")
     emit("after-combat", { shown() })
@@ -405,7 +405,7 @@ elseif scenario == "combat" then
     game.log[101] = { objectives = {} }
     Env.fire("QUEST_ACCEPTED", 101)
     emit("step-in-combat", { index(), frameText()[2] == before })
-    local f = Env.frameNamed("toawowcharGuideFrame")
+    local f = Env.ns.GuideWindow.Frame()
     f.moving = false
     f.scripts.OnDragStart(f)
     emit("drag-in-combat", { f.moving })

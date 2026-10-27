@@ -184,9 +184,9 @@ describe('the guide: the game\'s waypoint', () => {
     expect(get('waypoint', 'players-own')).toEqual([[], true])
   })
 
-  it('none for a grind step, none on a map the game refuses, and the guide works without the waypoint API', () => {
-    expect(get('waypoint', 'grind')).toEqual([7, []])
-    expect(get('waypoint', 'refused-map')).toEqual([8, [], false])
+  it('a grind step too (the middle of its zone); on a map the game refuses the guide\'s old one is cleared; it works without the waypoint API', () => {
+    expect(get('waypoint', 'grind')).toEqual([7, [['set', 1436, 500, 500], ['track', true]]])
+    expect(get('waypoint', 'refused-map')).toEqual([8, [['set', 1436, 500, 500], ['track', true], ['clear']], false])
     expect(get('waypoint', 'no-api')).toEqual([1, true])
   })
 })

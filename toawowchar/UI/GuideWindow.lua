@@ -7,8 +7,10 @@
 -- Saved (toawowcharDB.guide, Core.lua): `shown` and `point` (where it was dragged to).
 -- Combat: no frame is made, shown, moved, sized or redrawn while InCombatLockdown() is true.
 -- Two writes are allowed then, both to plain (not protected) regions: the coordinate line
--- says «In combat: updates when combat ends» when combat starts, and the window hides when
--- the guide turns off after an error. What would change is remembered and done once on
+-- says «In combat: updates when combat ends» when combat starts (and the distance empties),
+-- and the window hides when the guide turns off after an error. Also in combat, and not
+-- frames of ours: the game's GameTooltip on hovering a button; Back and Skip still work
+-- (they move the waypoint, and the window catches up after combat). What would change is remembered and done once on
 -- PLAYER_REGEN_ENABLED; a drag does not start in combat. The waypoint is not a frame and
 -- follows the step at once.
 -- Errors: every way in (the guide's events, /wowchar guide, the buttons, the drag, the
@@ -46,7 +48,8 @@
 --   Atlas markup |A:name:h:w:x:y:r:g:b|a: Blizzard_SharedXMLBase/TextureUtil.lua:289.
 --   Class colour: C_ClassColor.GetClassColor (ClassColorDocumentation.lua:11), else
 --     RAID_CLASS_COLORS (Blizzard_SharedXML/ClassColors.lua:1); UnitClass (UnitDocumentation.lua:911).
---   Distance: C_Navigation.GetDistance (InGameNavigationDocumentation.lua:11; Blizzard reads it
+--   Distance: C_Navigation.GetDistance and GetTargetState (InGameNavigationDocumentation.lua:11,
+--     :57; Blizzard reads them
 --     the same way, Blizzard_QuestNavigation/SuperTrackedFrame.lua:202), only while the game
 --     super-tracks this addon's waypoint (C_SuperTrack.IsSuperTrackingUserWaypoint,
 --     SuperTrackManagerDocumentation.lua:128). Read on C_Timer.NewTicker
@@ -79,7 +82,7 @@ local BUTTON = 16
 local TEXT_X = PAD + 4 + ICON + 8      -- the current step's text column
 local NEXT_X = PAD + 4 + SMALL_ICON + 8
 local LINE = {                         -- the height each line takes
-    header = 30, rule = 6, note = 14, zone = 16,
+    header = 30, rule = 6, note = 26, zone = 16, message = 28,
     kind = 12, title = 16, detail = 13, objective = 13, coords = 13, bar = 9,
     following = 18, progress = 5,
 }
@@ -186,12 +189,13 @@ local function Place()
     end
 end
 
--- A line of text: one line only (the game cuts it with an ellipsis), left aligned.
-local function Text(parent, font, width)
+-- A line of text, left aligned: one line only (the game cuts it with an ellipsis), or up to
+-- `lines` lines for a sentence that must be read whole (the Skyborne note, the message).
+local function Text(parent, font, width, lines)
     local fs = parent:CreateFontString(nil, "ARTWORK", font)
     fs:SetJustifyH("LEFT")
-    fs:SetWordWrap(false)
-    fs:SetMaxLines(1)
+    fs:SetWordWrap((lines or 1) > 1)
+    fs:SetMaxLines(lines or 1)
     if width then
         fs:SetWidth(width)
     end
@@ -324,7 +328,7 @@ local function Create()
     rule:SetPoint("TOPLEFT", PAD, -LINE.header)
     rule:SetPoint("TOPRIGHT", -PAD, -LINE.header)
 
-    widgets.note = Text(f, "GameFontNormalSmall", WIDTH - 2 * PAD)
+    widgets.note = Text(f, "GameFontNormalSmall", WIDTH - 2 * PAD, 2)
     widgets.zone = Text(f, "GameFontDisableSmall", WIDTH - 2 * PAD - 60)
     widgets.level = Text(f, "GameFontDisableSmall")
     widgets.level:SetJustifyH("RIGHT")
@@ -349,7 +353,7 @@ local function Create()
     widgets.distance = Text(f, "GameFontHighlightOutline")
     widgets.distance:SetPoint("LEFT", widgets.coords, "RIGHT", 8, 0)
     widgets.xp = Bar(f, column, 5)
-    widgets.message = Text(f, "GameFontHighlight", WIDTH - 2 * PAD)
+    widgets.message = Text(f, "GameFontHighlight", WIDTH - 2 * PAD, 2)
 
     -- The next two steps.
     widgets.following = {}
@@ -398,6 +402,15 @@ local function Distance()
     if C_SuperTrack and C_SuperTrack.IsSuperTrackingUserWaypoint then
         local ok, tracked = pcall(C_SuperTrack.IsSuperTrackingUserWaypoint)
         if not ok or not tracked then
+            return ""
+        end
+    end
+    -- As Blizzard's marker does (Blizzard_QuestNavigation/SuperTrackedFrame.lua:80): no distance
+    -- while the game's navigation target is Invalid (0) or Disabled (3)
+    -- (InGameNavigationDocumentation.lua:118, NavigationState).
+    if C_Navigation.GetTargetState then
+        local okState, navState = pcall(C_Navigation.GetTargetState)
+        if not okState or ns.IsSecret(navState) or navState == 0 or navState == 3 then
             return ""
         end
     end
@@ -533,7 +546,7 @@ local function Draw()
     elseif view.message then
         At(widgets.message, PAD, y - BLOCK_PAD)
         widgets.message:SetText(view.message)
-        y = y - BLOCK_PAD - LINE.title - BLOCK_PAD
+        y = y - BLOCK_PAD - LINE.message - BLOCK_PAD
     end
 
     -- The next two steps.
@@ -661,11 +674,10 @@ end
 
 -- Combat ended: what it held back, then a fresh draw (which starts the distance again).
 function GuideWindow.CombatEnded()
-    if pending.visible ~= nil then
-        Apply(pending.visible)
-    end
     pending.update = false
-    if frame and frame:IsShown() then
+    if pending.visible ~= nil then
+        Apply(pending.visible) -- draws when it shows
+    elseif frame and frame:IsShown() then
         Draw()
     end
 end

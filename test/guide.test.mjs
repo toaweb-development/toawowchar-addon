@@ -183,6 +183,8 @@ describe('the panel', () => {
     const o = p('objective')
     expect([o.icon, o.kind, o.detail, o.objectives]).toEqual(['Navigation-Tracked-Icon', grey('OBJECTIVE'), '|cffffff9aKobold Vermin|r', ['• Kobold Vermin slain: 4/10']])
     expect(p('objective-updated')).toEqual(['• Kobold Vermin slain: 7/10'])
+    expect(p('same-objectives')).toEqual([0])
+    expect(p('quiet-update')).toEqual([0])
     expect(p('objective-two')).toEqual([[`${CHECK} ${grey('Tough Wolf Meat: 8/8')}`, '• Boar Hide: 2/6'], 26])
   })
 
@@ -212,6 +214,11 @@ describe('the panel', () => {
     expect(p('objective').following[1][1]).toBe(grey('Kobold Camp Cleanup and Wolves || Boars · Marshal...'))
   })
 
+  it('the crest is the class colour; the current step has a faint gold gradient from the left', () => {
+    expect(p('crest')).toEqual([780, 610, 430])
+    expect(p('gradient')).toEqual(['HORIZONTAL', 1000, 820, 0, 180, 0])
+  })
+
   it('the height follows the content; the progress bar follows the route', () => {
     expect(p('objective').progress).toBe(222)
     expect(p('travel')[0].height).toBeLessThan(p('accept').height)
@@ -221,6 +228,7 @@ describe('the panel', () => {
     expect(p('ticker')).toEqual([500, 1])
     expect(p('tick')).toEqual(['131 yd'])
     expect(p('not-tracked')).toEqual([false])
+    expect(p('nav-invalid')).toEqual([false])
     expect(p('accept-again')).toEqual([true, true])
     expect(p('hidden')).toEqual([true])
   })
@@ -230,6 +238,8 @@ describe('the panel', () => {
     const WAIT = grey('In combat: updates when combat ends')
     expect(c('in-combat')).toEqual([WAIT, false, true, true, true])
     expect(c('step-in-combat')).toEqual([2, true, WAIT])
+    // the only writes in combat: the coordinate line and the distance, once each
+    expect(c('combat-writes')).toEqual(['coords:SetText', 'distance:SetText'])
     expect(c('after-combat')).toEqual(['Wolves || Boars', '|cff71d5ff42.1, 65.9|r', '24 yd', true])
   })
 })
@@ -281,6 +291,7 @@ describe('a guide or waypoint that hits an error: one chat line, that part off u
     expect(before).toEqual([true, true])
     expect(lines).toEqual([off('guide', 'settle broke')])
     expect([shown, calls, cleared, handled, count]).toEqual([false, [['clear']], true, 0, 1])
+    expect(f('event-error')[8]).toBe(true) // the distance ticker stopped with it
   })
 
   it('in a button and in /wowchar guide: the same, and the command still answers', () => {

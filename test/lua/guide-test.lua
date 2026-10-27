@@ -84,7 +84,13 @@ C_SuperTrack = {
     end,
     IsSuperTrackingUserWaypoint = function() return game.superTracked == true end,
 }
-C_Navigation = { GetDistance = function() return game.distance end }
+C_Navigation = {
+    GetDistance = function() return game.distance end,
+    GetTargetState = function() return game.navState end, -- 0 Invalid, 1 Occluded, 2 InRange, 3 Disabled
+}
+game.navState = 2
+CreateColor = function(r, g, b, a) return { r = r, g = g, b = b, a = a } end
+RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
 GetSubZoneText = function() return game.subzone end
 GetZoneText = function() return game.zone end
 UnitXP = function() return game.xp end
@@ -533,7 +539,7 @@ elseif scenario == "failsafe" then
     Env.fire("QUEST_ACCEPTED", 101)
     Env.fire("QUEST_TURNED_IN", 101)
     Env.fire("ZONE_CHANGED_NEW_AREA")
-    emit("event-error", { before, line, shown(), game.calls, game.waypoint == nil, calls, #guideLines(), deaf(events2) })
+    emit("event-error", { before, line, shown(), game.calls, game.waypoint == nil, calls, #guideLines(), deaf(events2), running() == nil })
 
     -- 3. a button
     fresh()
@@ -621,9 +627,10 @@ elseif scenario == "part" then
     toawowcharDB = nil
     load()
     login()
+    local createColor = CreateColor
     CreateColor = function() error("no colour", 0) end
     local answered = Env.slash("/wowchar guide")
-    CreateColor = nil
+    CreateColor = createColor
     local f = Env.ns.GuideWindow.Frame()
     emit("half-window", { answered, f ~= nil, f ~= nil and f.shown, Env.ns.Guide.part.IsOff() })
 
@@ -644,6 +651,23 @@ elseif scenario == "panel" then
     t.fn()
     emit("not-tracked", { panel().distance })
     game.superTracked = true
+    game.navState = 0
+    t.fn()
+    emit("nav-invalid", { panel().distance })
+    game.navState = 2
+    -- the crest in the class colour, the gold gradient behind the current step
+    local w = Env.ns.GuideWindow.Widgets()
+    emit("crest", { permille(w.crest.color[1]), permille(w.crest.color[2]), permille(w.crest.color[3]) })
+    local gr = w.glow.gradient
+    emit("gradient", { gr[1], permille(gr[2].r), permille(gr[2].g), permille(gr[2].b), permille(gr[2].a), permille(gr[3].a) })
+    -- QUEST_LOG_UPDATE with nothing new on an accept step: no redraw (the first one after
+    -- login finds the place again and draws; the next ones do not)
+    Env.fire("QUEST_LOG_UPDATE")
+    local writes = 0
+    Env.spy = function() writes = writes + 1 end
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.spy = nil
+    emit("quiet-update", { writes })
     -- the next steps: one line each, cut with an ellipsis
     Env.ns.RouteData.quests[102] = string.rep("A very long quest name ", 4)
     Env.fire("QUEST_LOG_UPDATE")
@@ -659,6 +683,13 @@ elseif scenario == "panel" then
     game.log[101].objectives[1][1] = "Kobold Vermin slain: 7/10"
     Env.fire("QUEST_LOG_UPDATE")
     emit("objective-updated", panel().objectives)
+    -- the same lines again: no redraw
+    local again = 0
+    Env.spy = function() again = again + 1 end
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.fire("UNIT_QUEST_LOG_CHANGED", "player")
+    Env.spy = nil
+    emit("same-objectives", { again })
     game.log[101] = { complete = true, objectives = { { "Kobold Vermin slain: 10/10", true } } }
     Env.fire("QUEST_LOG_UPDATE")
     local two = panel()
@@ -693,6 +724,10 @@ elseif scenario == "panel-combat" then
     login()
     Env.slash("/wowchar guide")
     local before = panel()
+    local w = Env.ns.GuideWindow.Widgets()
+    local names = { [w.coords] = "coords", [w.distance] = "distance" }
+    local writes = {}
+    Env.spy = function(region, method) writes[#writes + 1] = (names[region] or "other") .. ":" .. method end
     Env.combat = true
     Env.fire("PLAYER_REGEN_DISABLED")
     local during = panel()
@@ -700,6 +735,11 @@ elseif scenario == "panel-combat" then
     game.log[101] = { objectives = {} }
     Env.fire("QUEST_ACCEPTED", 101)
     emit("step-in-combat", { index(), panel().quest == before.quest, panel().coords })
+    Env.ns.GuideWindow.Update()
+    Env.fire("ZONE_CHANGED")
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.spy = nil
+    emit("combat-writes", writes)
     Env.combat = false
     Env.fire("PLAYER_REGEN_ENABLED")
     local after = panel()

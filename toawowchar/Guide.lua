@@ -550,7 +550,7 @@ local function GameText(fn)
         return nil
     end
     local ok, value = pcall(fn)
-    if ok and type(value) == "string" and value ~= "" and not ns.IsSecret(value) then
+    if ok and not ns.IsSecret(value) and type(value) == "string" and value ~= "" then
         return value
     end
     return nil
@@ -585,8 +585,9 @@ function Guide.Objectives(step)
         local ok, list = pcall(C_QuestLog.GetQuestObjectives, id)
         if ok and type(list) == "table" then
             for _, o in ipairs(list) do
-                if type(o) == "table" and type(o.text) == "string" and o.text ~= "" and not ns.IsSecret(o.text) then
-                    lines[#lines + 1] = { text = Escape(Short(o.text, MAX_OBJECTIVE)), done = o.finished == true }
+                if type(o) == "table" and not ns.IsSecret(o.text) and type(o.text) == "string" and o.text ~= "" then
+                    local done = not ns.IsSecret(o.finished) and o.finished == true
+                    lines[#lines + 1] = { text = Escape(Short(o.text, MAX_OBJECTIVE)), done = done }
                     if #lines >= Guide.MAX_OBJECTIVES then
                         return lines
                     end
@@ -687,6 +688,9 @@ end
 local handlers = {}
 
 -- The window draws the view again (when shown; after combat when in combat).
+-- What the objective lines said when the window last drew them (QUEST_LOG_UPDATE).
+local lastObjectives
+
 local function Redraw()
     if ns.GuideWindow then
         ns.GuideWindow.Update()
@@ -724,14 +728,24 @@ function handlers.QUEST_LOG_UPDATE()
         Reposition()
     end
     local step = Guide.Current()
+    local before = state.index
     -- Frequent: only the steps the quest log can finish are looked at.
     if step and (step[1] == OBJECTIVE or step[1] == ACCEPT) then
         Guide.Settle()
     end
-    -- The objective lines (x/10) of the step now shown.
+    -- The objective lines (x/10) of the step shown: redrawn only when they changed (a step
+    -- that moved on was drawn by Settle already).
     step = Guide.Current()
-    if step and (step[1] == OBJECTIVE or step[1] == TURNIN) then
-        Redraw()
+    if state.index == before and step and (step[1] == OBJECTIVE or step[1] == TURNIN) then
+        local seen = {}
+        for _, o in ipairs(Guide.Objectives(step)) do
+            seen[#seen + 1] = (o.done and "+" or "-") .. o.text
+        end
+        local signature = state.index .. "\n" .. table.concat(seen, "\n")
+        if signature ~= lastObjectives then
+            lastObjectives = signature
+            Redraw()
+        end
     end
 end
 

@@ -92,12 +92,15 @@ local function newTexture(parent)
     end })
 end
 
-fontMethods.SetText = function(self, text) self.text = text end
+-- Env.spy(region, method), when set, hears every SetText, SetPoint, SetHeight, Show and Hide
+-- of a frame or font string (a test counts what changes in combat).
+local function spy(self, method) if Env.spy then Env.spy(self, method) end end
+fontMethods.SetText = function(self, text) spy(self, "SetText"); self.text = text end
 fontMethods.GetText = function(self) return self.text or "" end
-fontMethods.SetPoint = function(self, ...) self.points[#self.points + 1] = { ... } end
+fontMethods.SetPoint = function(self, ...) spy(self, "SetPoint"); self.points[#self.points + 1] = { ... } end
 fontMethods.SetTextColor = function(self, r, g, b) self.color = { r, g, b } end
-fontMethods.Hide = function(self) self.shown = false end
-fontMethods.Show = function(self) self.shown = true end
+fontMethods.Hide = function(self) spy(self, "Hide"); self.shown = false end
+fontMethods.Show = function(self) spy(self, "Show"); self.shown = true end
 fontMethods.ClearAllPoints = function(self) self.points = {} end
 
 frameMethods.SetScript = function(self, name, fn) self.scripts[name] = fn end
@@ -107,11 +110,12 @@ frameMethods.HookScript = function(self, name, fn)
     table.insert(self.hooks[name], fn)
 end
 frameMethods.SetText = function(self, text)
+    spy(self, "SetText")
     self.text = text
     if self.kind == "EditBox" then fire(self, "OnTextChanged", false) end
 end
 frameMethods.GetText = function(self) return self.text or "" end
-frameMethods.SetPoint = function(self, ...) self.points[#self.points + 1] = { ... } end
+frameMethods.SetPoint = function(self, ...) spy(self, "SetPoint"); self.points[#self.points + 1] = { ... } end
 frameMethods.ClearAllPoints = function(self) self.points = {} end
 -- GetPoint(1): the first anchor, as SetPoint(point, relativeTo, relativePoint, x, y) gave it.
 frameMethods.GetPoint = function(self)
@@ -121,12 +125,14 @@ frameMethods.GetPoint = function(self)
 end
 frameMethods.SetSize = function(self, w, h) self.width, self.height = w, h end
 frameMethods.SetWidth = function(self, w) self.width = w end
-frameMethods.SetHeight = function(self, h) self.height = h end
+frameMethods.SetHeight = function(self, h) spy(self, "SetHeight"); self.height = h end
 frameMethods.Show = function(self)
+    spy(self, "Show")
     self.shown = true
     fire(self, "OnShow")
 end
 frameMethods.Hide = function(self)
+    spy(self, "Hide")
     if self.shown then
         self.shown = false
         fire(self, "OnHide")

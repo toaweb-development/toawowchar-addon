@@ -4,4 +4,9 @@
 ## SavedVariables: toawowcharDB
 ## Version: 0.4.1
 ## Author: toaweb
-toawowchar.lua
+Locales\enUS.lua
+Core.lua
+Serializer.lua
+Export.lua
+Cache.lua
+UI\Window.lua

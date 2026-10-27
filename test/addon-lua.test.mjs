@@ -31,6 +31,13 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
 const read = rel => readFileSync(`${ROOT}/${rel}`, 'utf8')
 const ADDON_VERSION = /^## Version: (\S+)$/m.exec(read('toawowchar/toawowchar.toc'))[1]
 
+/** The Lua files the TOC loads, in its order (paths from the repository root, "/" between folders). */
+const ADDON_FILES = read('toawowchar/toawowchar.toc').split('\n')
+  .map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+  .map(l => `toawowchar/${l.replaceAll('\\', '/')}`)
+/** All of the addon's Lua, file after file. */
+const addonCode = () => ADDON_FILES.map(read).join('\n')
+
 /** The files the tests pin the addon's output to. UPDATE_FIXTURES=1 writes them again (after a deliberate change). */
 const FIXTURE_DIR = 'test/fixtures'
 const fixture = name => read(`${FIXTURE_DIR}/${name}.txt`).trim()
@@ -73,15 +80,34 @@ const identityOf = (scenario) => {
 /** Lines of `label<TAB>json` to a map of label to the raw json (or 'ERROR'). */
 const labelled = lines => new Map(lines.map(l => l.split('\t')))
 
-describe('toawowchar.lua (Lua 5.1)', () => {
-  it('compiles (luac -p)', () => {
-    const r = lua(['luac', '-p', 'toawowchar/toawowchar.lua'])
+describe('the addon\'s Lua (Lua 5.1)', () => {
+  it('compiles (luac -p, every file the TOC loads)', () => {
+    expect(ADDON_FILES.length).toBeGreaterThan(1)
+    const r = lua(['luac', '-p', ...ADDON_FILES])
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
   })
 
+  it('every text for the player comes from the locale table: each L["KEY"] the code uses is defined once in Locales/enUS.lua', () => {
+    const locale = read('toawowchar/Locales/enUS.lua')
+    const defined = [...locale.matchAll(/^L\["([A-Z0-9_]+)"\] = "/gm)].map(m => m[1])
+    expect(new Set(defined).size).toBe(defined.length)
+    const used = new Set(ADDON_FILES.filter(f => !f.endsWith('/Locales/enUS.lua'))
+      .flatMap(f => [...read(f).replace(/--.*$/gm, '').matchAll(/\bL\["([A-Za-z0-9_]+)"\]/g)].map(m => m[1])))
+    expect(used.size).toBeGreaterThan(40)
+    expect([...used].filter(k => !defined.includes(k))).toEqual([])
+    expect(defined.filter(k => !used.has(k))).toEqual([])
+  })
+
+  it('every file starts with the namespace line and shares state only through it', () => {
+    for (const file of ADDON_FILES.filter(f => !f.endsWith('/Data/Routes.lua'))) {
+      const first = read(file).split('\n').find(l => l && !l.startsWith('--'))
+      expect(first, file).toMatch(/^local (addonName|_), ns = \.\.\.$/)
+    }
+  })
+
   it('the version is the same in the code and in the .toc, and it emits format 3', () => {
-    const code = read('toawowchar/toawowchar.lua')
+    const code = read('toawowchar/Core.lua')
     const toc = read('toawowchar/toawowchar.toc')
     expect(code).toContain(`local ADDON_VERSION = "${ADDON_VERSION}"`)
     expect(code).toContain('local FORMAT_VERSION = 3')
@@ -92,7 +118,7 @@ describe('toawowchar.lua (Lua 5.1)', () => {
   })
 
   it('does not use C_EncodingUtil any more (the stub raises if it is touched)', () => {
-    const code = read('toawowchar/toawowchar.lua')
+    const code = addonCode()
       .split('\n').filter(l => !l.trim().startsWith('--')).join('\n')
     expect(code).not.toMatch(/C_EncodingUtil|CompressString|EncodeBase64|SerializeJSON/)
     expect(exportFor('eu').identity.name).toBe('Thor')
@@ -290,7 +316,7 @@ describe('toawowchar.lua (Lua 5.1)', () => {
     it('is the example export of format 3: written to dist/examples/export-format-3.txt, made of the stub\'s invented data', () => {
       const j = parseExport(line)
       // one example for each format the addon emits; a new format number in the code needs its own example here
-      const emitted = [...read('toawowchar/toawowchar.lua').matchAll(/^local FORMAT_VERSION = (\d+)$/gm)].map(m => Number(m[1]))
+      const emitted = [...addonCode().matchAll(/^local FORMAT_VERSION = (\d+)$/gm)].map(m => Number(m[1]))
       expect(emitted).toEqual([3])
       expect(j.format).toBe(3)
       expect(j.addonVersion).toBe(ADDON_VERSION)
@@ -1026,7 +1052,7 @@ describe('toawowchar.lua (Lua 5.1)', () => {
     return snapMemo.get(key)
   }
   /** The addon's code without its comment lines. */
-  const codeOf = () => read('toawowchar/toawowchar.lua')
+  const codeOf = () => addonCode()
     .split('\n').filter(l => !l.trim().startsWith('--')).join('\n')
 
   describe('the snapshot: the cache kept current by game events', () => {
@@ -1283,8 +1309,8 @@ describe('toawowchar.lua (Lua 5.1)', () => {
       const toc = read('toawowchar/toawowchar.toc')
       expect(toc).toMatch(/^## Title: toawowchar$/m)
       expect(toc).toMatch(/^## SavedVariables: toawowcharDB$/m)
-      expect(toc).toMatch(/^toawowchar\.lua$/m)
-      const code = read('toawowchar/toawowchar.lua')
+      expect(toc).toMatch(/^Core\.lua$/m)
+      const code = addonCode()
       expect(code).not.toMatch(/WowcharExport/)
       expect(code).toContain('"toawowcharFrame"')
       expect(code).toContain('PREFIX = "WOWCHAR:"') // the export prefix is unchanged

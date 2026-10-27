@@ -4,15 +4,17 @@
     scripts/check-bump.py origin/main            compare the working tree with origin/main
     --root DIR                                   a checkout other than this one (the tests use it)
 
-The pull-request check of ci.yml runs it with the base branch. The inputs of the zip are the three
-files `build-zip.py` reads (`toawowchar/README.md`, `.lua`, `.toc`) and the two scripts that decide
-the bytes it writes (`scripts/build-zip.py`, `scripts/addon_info.py`). When none of them differs from
+The pull-request check of ci.yml runs it with the base branch. The inputs of the zip are every file
+under `toawowchar/` (what `build-zip.py` reads, ZIP_FILES; a file added, changed or removed there
+counts) and the two scripts that decide the bytes it writes (`scripts/build-zip.py`,
+`scripts/addon_info.py`). When none of them differs from
 the base, the check passes (docs, tests, workflows may change freely). When one differs, the version
 must be strictly higher than the base's in all five places, each place on its own:
-  the TOC's `## Version:`, the Lua's `ADDON_VERSION`, the Lua's first line (`-- toawowchar X.Y.Z`),
+  the TOC's `## Version:`, `ADDON_VERSION` in Core.lua, Core.lua's first line (`-- toawowchar X.Y.Z`),
   the README's `Version X.Y.Z` line and the newest `## [X.Y.Z] - date` entry of CHANGELOG.md,
 and that entry must have text. In every case no place may be lower than the base's. That the five
-places agree with each other is `check-version.py`'s job.
+places agree with each other is `check-version.py`'s job. A base from before the split of the
+addon (0.4.x: one file, `toawowchar/toawowchar.lua`) has its Lua version in that file.
 
 The base needs the git history of the base (`fetch-depth: 0`). Python 3.8 or newer, standard library
 only; git is called with a list of arguments, never through a shell.
@@ -27,13 +29,18 @@ import addon_info
 
 FOLDER = addon_info.FOLDER
 
-# What decides the bytes of the zip.
-ZIP_INPUTS = tuple(f"{FOLDER}/{name}" for name in addon_info.ZIP_FILES) + ("scripts/build-zip.py", "scripts/addon_info.py")
+# What decides the bytes of the zip: the addon folder (every file in it, so a removed one counts too)
+# and the two scripts.
+ZIP_INPUTS = (f"{FOLDER}/", "scripts/build-zip.py", "scripts/addon_info.py")
+
+# Where the Lua version is, and where it was before the addon was split into several files.
+VERSION_PATH = f"{FOLDER}/{addon_info.VERSION_FILE}"
+LEGACY_VERSION_PATH = f"{FOLDER}/{FOLDER}.lua"
 
 PLACES = (
     ("the TOC's ## Version", f"{FOLDER}/{FOLDER}.toc", lambda text: addon_info.parse_toc(text)[0]),
-    ("the Lua's ADDON_VERSION", f"{FOLDER}/{FOLDER}.lua", addon_info.lua_version),
-    ("the Lua's first line", f"{FOLDER}/{FOLDER}.lua", addon_info.lua_header_version),
+    ("the Lua's ADDON_VERSION", VERSION_PATH, addon_info.lua_version),
+    ("the Lua's first line", VERSION_PATH, addon_info.lua_header_version),
     ("the README's version line", f"{FOLDER}/README.md", addon_info.readme_version),
     ("the newest CHANGELOG entry", "CHANGELOG.md", lambda text: (addon_info.changelog_versions(text) or [None])[0]),
 )
@@ -85,6 +92,8 @@ def check_bump(root, base):
     for label, path, read in PLACES:
         if path not in base_texts:
             status, out = git(root, "show", f"{sha}:{path}")
+            if status != 0 and path == VERSION_PATH:
+                status, out = git(root, "show", f"{sha}:{LEGACY_VERSION_PATH}")
             base_texts[path] = out if status == 0 else None
             try:
                 head_texts[path] = (root / path).read_text(encoding="utf-8")

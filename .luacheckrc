@@ -1,7 +1,7 @@
 -- luacheck for the addon (scripts/test.sh runs it in the image of test/Dockerfile; target: zero
 -- warnings). The WoW client runs Lua 5.1. Not in the zip.
 std = "lua51"
-max_line_length = 150 -- the longest line today; tighten it when phase B splits the file
+max_line_length = 150 -- the longest line today
 
 -- The only globals the addon may write: its SavedVariables (the TOC's ## SavedVariables) and
 -- the slash command.
@@ -12,7 +12,7 @@ globals = {
     "SlashCmdList",
 }
 
--- The game's API and constants the addon reads, exactly the ones toawowchar.lua uses. A new
+-- The game's API and constants the addon reads, exactly the ones its files use. A new
 -- game call goes here in the same change (and is guarded in the Lua, AGENTS.md).
 read_globals = {
     -- frames, chat and the UI
@@ -34,11 +34,4 @@ read_globals = {
     "UnitXPMax",
     -- global constants
     "BANK_CONTAINER", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "PVP_RANK_POINTS_FACTION_ID",
-}
-
-files["toawowchar/toawowchar.lua"] = {
-    -- Two cosmetic leftovers in BuildWindow, not bugs: the rows loop uses only the index, and the
-    -- text box frame returned by CreateTextBox is not needed. Removing them changes the zip, so it
-    -- waits for phase B (which rewrites that part); then drop these two lines.
-    ignore = { "213/row", "231/box" },
 }

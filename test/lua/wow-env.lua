@@ -1,4 +1,4 @@
--- A stub of the WoW API for running toawowchar/toawowchar.lua in
+-- A stub of the WoW API for running the addon (the files of toawowchar/toawowchar.toc) in
 -- plain Lua 5.1 (no client). Usage from a test script, run from the repository
 -- root:
 --     local Env = dofile("test/lua/wow-env.lua")
@@ -220,11 +220,26 @@ function Env.fire(event, ...)
     end
 end
 
--- Loads the addon. The second argument stands in for the addon's namespace table
--- the client passes (the addon puts its helpers in it).
+-- The Lua files the TOC loads, in its order ("\\" between folders becomes "/").
+function Env.tocFiles()
+    local files = {}
+    for line in io.lines("toawowchar/toawowchar.toc") do
+        line = line:gsub("%s+$", "")
+        if line ~= "" and not line:find("^#") then
+            files[#files + 1] = "toawowchar/" .. line:gsub("\\", "/")
+        end
+    end
+    return files
+end
+
+-- Loads the addon the way the client does: every file of the TOC in its order, each
+-- given the addon's name and the same namespace table (Env.ns; the files share their
+-- state and helpers through it).
 function Env.load()
-    local chunk = assert(loadfile("toawowchar/toawowchar.lua"))
-    chunk("toawowchar", Env.ns)
+    for _, path in ipairs(Env.tocFiles()) do
+        local chunk = assert(loadfile(path))
+        chunk("toawowchar", Env.ns)
+    end
 end
 
 -- C_Timer.After for the debounce: callbacks wait in Env.timers until flushTimers().

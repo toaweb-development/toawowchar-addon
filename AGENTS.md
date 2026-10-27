@@ -12,13 +12,12 @@ From `docs/wow-addon-rules.md`, decided by the owner:
 
 - **The export is plain JSON behind `WOWCHAR:3:`, with no LibSerialize or LibDeflate.** wowchar decodes the text on its server (`app/server/utils/addon-export.ts`), so the addon writes a format that wowchar owns and can read without a Lua library (see «What lives where»).
 - **Releases use our own deterministic zip pipeline (`scripts/build-zip.py`, `release.yml`), not BigWigs Packager.** wowchar pins the release zip by size and sha256, so the bytes must be reproducible on any machine and in any time zone (see «Release»).
-- **The addon is one file (`toawowchar/toawowchar.lua`) until phase B splits it.** No locale tables yet either; both wait for phase B.
 
 ## What lives where
 
 | Here (toawowchar-addon) | In wowchar (toawowchar) |
 |---|---|
-| The addon: `toawowchar/toawowchar.lua`, `.toc` and the players' `README.md` | The web app, its database, its Docker image and deploy |
+| The addon: the Lua files under `toawowchar/` (the TOC lists them), `toawowchar.toc` and the players' `README.md` | The web app, its database, its Docker image and deploy |
 | The Lua tests and the stub of the game's API (`test/lua/`) | The import of the text (the real decoder) and its tests |
 | The release scripts, CI and the release workflow | The pin of an addon release (`app/shared/addon-release.ts`): version, asset address, size, sha256, TOC interface numbers |
 | The example exports of a release | The same examples, committed as fixtures that must import without error |
@@ -32,13 +31,13 @@ From `docs/wow-addon-rules.md`, decided by the owner:
 
 Steps are in README.md, «Cut a release». The rules behind them:
 
-- The version is in five places that must agree: `## Version:` in the TOC, `ADDON_VERSION` in the Lua, the first line of the Lua (`-- toawowchar X.Y.Z`), the `Version X.Y.Z` line in `toawowchar/README.md` (the first line that starts that way; keep it under «Status») and the newest `## [X.Y.Z] - date` in `CHANGELOG.md`. `scripts/check-version.py` checks them; `## Interface:` must be a comma-separated list of whole numbers (10000 to 999999), no repeats.
+- The version is in five places that must agree: `## Version:` in the TOC, `ADDON_VERSION` in `toawowchar/Core.lua`, the first line of `Core.lua` (`-- toawowchar X.Y.Z`), the `Version X.Y.Z` line in `toawowchar/README.md` (the first line that starts that way; keep it under «Status») and the newest `## [X.Y.Z] - date` in `CHANGELOG.md`. `scripts/check-version.py` checks them; `## Interface:` must be a comma-separated list of whole numbers (10000 to 999999), no repeats.
 - **The pull-request version gate.** A change to any file in the zip (`toawowchar/*`) or to the scripts that decide its bytes (`scripts/build-zip.py`, `scripts/addon_info.py`) needs a new version, higher than the base branch's in all five places, and a CHANGELOG entry with text, even for a comment or a typo. `ci.yml` enforces it on every pull request with `scripts/check-bump.py origin/<base>` (the base comes through `env:`; the checkout has `fetch-depth: 0`). Docs, tests and workflows may change without a bump. A version never goes down. Do not weaken or skip the step to get a pull request through. SemVer; pre-1.0, so a MINOR may break.
 - **The owner tags and pushes.** Agents do not commit, tag, push or run workflows without being told to. `vX.Y.Z` is annotated and is put on a commit on `main`; `release.yml` publishes the release. Tags are never moved or deleted.
 - **Tag ruleset.** Before the first tag the owner sets up a tag ruleset on this repository (pattern `v*`, restrict updates and deletions). Tags are never moved or deleted; a bad release gets a new version.
 - The release asset address is `https://github.com/toaweb/toawowchar-addon/releases/download/vX.Y.Z/toawowchar-X.Y.Z.zip`. wowchar pins that address with the size and sha256 of the file, so a release is never replaced after it is published: a fix is a new version. The size and sha256 to pin are in the release's `SHA256SUMS` and in the output of `python3 scripts/build-zip.py` (the build is deterministic: the local zip equals the release's).
 - After a release, wowchar's pin is bumped: its `AGENTS.md`, «Addon release», has its side of the procedure.
-- The zip holds exactly `toawowchar/README.md`, `toawowchar/toawowchar.lua` and `toawowchar/toawowchar.toc`, in that order. A new file in the zip means a change to `ZIP_FILES` in `scripts/addon_info.py` and in the TOC. Source files are LF only (`.gitattributes`); `build-zip.py` refuses a carriage return.
+- The zip holds exactly the files of `ZIP_FILES` in `scripts/addon_info.py` under `toawowchar/`, in that order: the players' README, the TOC and every Lua file the TOC loads. A new file in the zip means a change to `ZIP_FILES` and to the TOC in the same commit; `check-version.py` refuses a TOC that loads a file the zip lacks, or misses a Lua file the zip has. TOC lines use `\` between folders (Blizzard's own style; `addon_info.py` reads it as `/`). A new file also changes the pinned zip of the synthetic tree in `test/release.test.mjs` (`SYNTHETIC_SIZE`, `SYNTHETIC_SHA256`): pin the new numbers only after reading the diff of `build-zip.py`. Source files are LF only (`.gitattributes`); `build-zip.py` refuses a carriage return.
 
 ## CI and workflows
 
@@ -80,7 +79,7 @@ On 2026-10-22, in a real Forever client (build 70450, addon 0.4.0):
 - **luacheck** (`.luacheckrc`, `std = "lua51"`): the only globals the addon writes are `toawowcharDB`, `SLASH_WOWCHAR1`, `SLASH_WOWCHAR2` and `SlashCmdList`; every game global it reads is listed in `read_globals`, and a new game call adds its name there in the same change. Zero warnings; do not silence a warning with an `ignore` unless it is a cosmetic leftover with a reason next to it.
 - The Lua is the WoW client's Lua 5.1. Every game call is guarded (`pcall` or an existence check): a missing function makes one section `missing`, never an error. The text is written by the addon's own serializer; no `|` may reach the copy box.
 - Do not weaken a test to make it pass. `UPDATE_FIXTURES=1` is for a deliberate change to what the addon exports, and the diff of `test/fixtures/` is then read.
-- The players' README is player-facing and must be true to the code. Check a claim against `toawowchar/toawowchar.lua` before you write it; say «not tested in a real client» where that is the case.
+- The players' README is player-facing and must be true to the code. Check a claim against the Lua under `toawowchar/` before you write it; say «not tested in a real client» where that is the case.
 - Dependencies: none (Node's built-in test runner, Python's standard library, no `package.json`). A new dependency needs a reason (`dependencies` standard).
 
 ## License

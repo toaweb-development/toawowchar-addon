@@ -2,8 +2,8 @@
 
 Shared by check-version.py and build-zip.py. Python 3.8 or newer, standard library
 only. The rules are the ones wowchar's app/build/addon-release.ts used when the addon
-lived in that repository: the zip holds the addon's README, Lua and TOC under
-`toawowchar/`, and the TOC, the Lua, the README and the CHANGELOG agree on the version.
+lived in that repository: the zip holds the addon's README, its Lua files and its TOC under
+`toawowchar/`, and the TOC, the Lua (Core.lua), the README and the CHANGELOG agree on the version.
 """
 import re
 from pathlib import Path
@@ -13,9 +13,22 @@ ROOT = Path(__file__).resolve().parent.parent
 # The folder at the root of the zip, and the stem of the addon's files.
 FOLDER = "toawowchar"
 
-# What goes into the zip, in this order (sorted by code unit, not by locale). Nothing else:
-# no tests, no scripts. The TOC may only load files that are in this list.
-ZIP_FILES = ("README.md", f"{FOLDER}.lua", f"{FOLDER}.toc")
+# What goes into the zip, in this order (sorted by code unit, not by locale), with "/" between
+# folders. Nothing else: no tests, no scripts. The TOC may only load files that are in this
+# list (a TOC line may use "\\" between folders, as Blizzard's own TOCs do).
+ZIP_FILES = (
+    "Cache.lua",
+    "Core.lua",
+    "Export.lua",
+    "Locales/enUS.lua",
+    "README.md",
+    "Serializer.lua",
+    "UI/Window.lua",
+    f"{FOLDER}.toc",
+)
+
+# The Lua file that holds the version: its first line and ADDON_VERSION.
+VERSION_FILE = "Core.lua"
 
 SEMVER = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)")
 
@@ -46,7 +59,7 @@ def parse_toc(text):
             elif key == "interface":
                 interface = [item.strip() for item in meta.group(2).split(",")]
         elif not line.startswith("#"):
-            files.append(line)
+            files.append(line.replace("\\", "/"))
     return version, interface, files
 
 
@@ -118,7 +131,7 @@ def check(root):
     elif not SEMVER.fullmatch(toc_version):
         problems.append(f"the TOC's ## Version is {toc_version!r}, not MAJOR.MINOR.PATCH")
 
-    lua_text = get(addon / f"{FOLDER}.lua")
+    lua_text = get(addon / VERSION_FILE)
     lua = lua_version(lua_text or "")
     if lua_text is not None and lua != toc_version:
         problems.append(f"the Lua's ADDON_VERSION is {lua if lua is not None else 'missing'}, the TOC's ## Version is {toc_version or 'missing'}")
@@ -149,4 +162,8 @@ def check(root):
     for name in toc_files:
         if name not in ZIP_FILES:
             problems.append(f"the TOC loads {name}, which the zip does not contain (ZIP_FILES in scripts/addon_info.py)")
+    if toc_text is not None:
+        for name in ZIP_FILES:
+            if name.endswith(".lua") and name not in toc_files:
+                problems.append(f"the zip contains {name}, which the TOC does not load")
     return version, problems

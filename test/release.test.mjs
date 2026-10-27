@@ -6,16 +6,23 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from './lib/suite.mjs'
 import { expect } from './lib/expect.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
+
+/** ZIP_FILES of scripts/addon_info.py: what the zip holds under toawowchar/, in its order. */
+const ZIP_FILES = JSON.parse(spawnSync('python3', ['-I', '-c',
+  'import json, sys; sys.path.insert(0, sys.argv[1]); import addon_info; print(json.dumps(addon_info.ZIP_FILES))',
+  join(ROOT, 'scripts')], { encoding: 'utf8' }).stdout)
 // The zip made from syntheticRepo() below with scripts/build-zip.py. Pinned here so that a change to the
 // container (header fields, order, stamp) shows as a changed hash, not as a quiet change of every release.
-const SYNTHETIC_SIZE = 574
-const SYNTHETIC_SHA256 = '034b5ae998373fc78ed0935e12ec3bb87e8564abea1e7751cfcdf73efd834514'
+// The synthetic tree has one small file for each entry of ZIP_FILES, so a new file in the zip changes
+// these two numbers too (read the diff of build-zip.py first: the container itself must not change).
+const SYNTHETIC_SIZE = 1364
+const SYNTHETIC_SHA256 = 'a54febe590d755a5f04d3b40c6b34445e9d44c6e390f27987f3d1b8a1e79954a'
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 
@@ -33,8 +40,13 @@ function copyRepo(into = temp()) {
 function syntheticRepo() {
   const dir = temp()
   mkdirSync(join(dir, 'toawowchar'))
-  writeFileSync(join(dir, 'toawowchar', 'toawowchar.toc'), '## Interface: 11507, 16001\n## Title: toawowchar\n## Version: 1.2.3\ntoawowchar.lua\n')
-  writeFileSync(join(dir, 'toawowchar', 'toawowchar.lua'), '-- toawowchar 1.2.3\nlocal ADDON_VERSION = "1.2.3"\nreturn 1\n')
+  const lua = ZIP_FILES.filter(f => f.endsWith('.lua'))
+  writeFileSync(join(dir, 'toawowchar', 'toawowchar.toc'),
+    `## Interface: 11507, 16001\n## Title: toawowchar\n## Version: 1.2.3\n${lua.map(f => `${f.replaceAll('/', '\\')}\n`).join('')}`)
+  for (const f of lua) {
+    mkdirSync(dirname(join(dir, 'toawowchar', f)), { recursive: true })
+    writeFileSync(join(dir, 'toawowchar', f), f === 'Core.lua' ? '-- toawowchar 1.2.3\nlocal ADDON_VERSION = "1.2.3"\nreturn 1\n' : `-- ${f}\nreturn 1\n`)
+  }
   writeFileSync(join(dir, 'toawowchar', 'README.md'), '# toawowchar\n\nVersion 1.2.3, for the tests.\n')
   writeFileSync(join(dir, 'CHANGELOG.md'), '# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-02\n')
   return dir
@@ -78,7 +90,7 @@ describe('scripts/check-version.py', () => {
 
   it.each([
     ['the TOC', 'toawowchar/toawowchar.toc', s => s.replace(/^## Version: .*$/m, '## Version: 9.9.9'), /Lua's ADDON_VERSION is \d+\.\d+\.\d+, the TOC's ## Version is 9\.9\.9/],
-    ['the Lua', 'toawowchar/toawowchar.lua', s => s.replace(/^local ADDON_VERSION = "[^"]*"/m, 'local ADDON_VERSION = "9.9.9"'), /Lua's ADDON_VERSION is 9\.9\.9/],
+    ['the Lua', 'toawowchar/Core.lua', s => s.replace(/^local ADDON_VERSION = "[^"]*"/m, 'local ADDON_VERSION = "9.9.9"'), /Lua's ADDON_VERSION is 9\.9\.9/],
     ['the README', 'toawowchar/README.md', s => s.replace(/^Version \d+\.\d+\.\d+/m, 'Version 9.9.9'), /README's version line is 9\.9\.9/],
     ['the changelog', 'CHANGELOG.md', s => s.replace(/^## \[(\d+\.\d+\.\d+)\] - /m, '## [9.9.9] - '), /CHANGELOG\.md: the newest entry is 9\.9\.9/],
   ])('fails when %s names another version than the others', (_who, file, change, message) => {
@@ -98,7 +110,7 @@ describe('scripts/check-version.py', () => {
       [s => `\n${s}`, /Lua's first line says no version/],
     ]) {
       const dir = copyRepo()
-      edit(dir, 'toawowchar/toawowchar.lua', change)
+      edit(dir, 'toawowchar/Core.lua', change)
       const r = check(dir)
       expect(r.status, String(change)).toBe(1)
       expect(r.stderr, String(change)).toMatch(message)
@@ -108,7 +120,7 @@ describe('scripts/check-version.py', () => {
   it('fails when the README has no version line, the Lua no ADDON_VERSION, the TOC no ## Version', () => {
     for (const [file, change, message] of [
       ['toawowchar/README.md', s => s.replace(/^Version \d+\.\d+\.\d+/m, 'Status'), /README's version line is missing/],
-      ['toawowchar/toawowchar.lua', s => s.replace('local ADDON_VERSION =', 'local VERSION ='), /ADDON_VERSION is missing/],
+      ['toawowchar/Core.lua', s => s.replace('local ADDON_VERSION =', 'local VERSION ='), /ADDON_VERSION is missing/],
       ['toawowchar/toawowchar.toc', s => s.replace(/^## Version: .*\n/m, ''), /no ## Version: line/],
       ['CHANGELOG.md', s => s.replace(/^## \[\d+\.\d+\.\d+\].*$/gm, ''), /newest entry is missing/],
     ]) {
@@ -144,7 +156,7 @@ describe('scripts/check-version.py', () => {
 
   it('reports every problem, not only the first', () => {
     const dir = copyRepo()
-    edit(dir, 'toawowchar/toawowchar.lua', s => s.replace(/^local ADDON_VERSION = "[^"]*"/m, 'local ADDON_VERSION = "9.9.9"'))
+    edit(dir, 'toawowchar/Core.lua', s => s.replace(/^local ADDON_VERSION = "[^"]*"/m, 'local ADDON_VERSION = "9.9.9"'))
     edit(dir, 'toawowchar/README.md', s => s.replace(/^Version \d+\.\d+\.\d+/m, 'Version 8.8.8'))
     edit(dir, 'toawowchar/toawowchar.toc', s => s.replace(/^## Interface: .*$/m, '## Interface: abc'))
     const r = check(dir)
@@ -198,6 +210,15 @@ describe('scripts/check-version.py', () => {
     expect(r.stderr).toContain('the TOC loads extra.lua, which the zip does not contain')
   })
 
+  it('refuses a TOC that does not load a Lua file of the zip, and reads "\\" in a TOC line as a folder', () => {
+    const dir = copyRepo()
+    expect(check(dir).status).toBe(0) // the real TOC writes UI\Window.lua
+    edit(dir, 'toawowchar/toawowchar.toc', s => s.replace(/^Serializer\.lua\n/m, ''))
+    const r = check(dir)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('the zip contains Serializer.lua, which the TOC does not load')
+  })
+
   describe('with a tag', () => {
     it('refuses a tag of another version', () => {
       const r = check(copyRepo(), 'v9.9.9')
@@ -249,8 +270,8 @@ function bump(dir, to, { text = '### Fixed\n- a change for the test\n', skip = [
   const from = versionOf(dir)
   const places = {
     toc: ['toawowchar/toawowchar.toc', s => s.replace(`## Version: ${from}`, `## Version: ${to}`)],
-    lua: ['toawowchar/toawowchar.lua', s => s.replace(`local ADDON_VERSION = "${from}"`, `local ADDON_VERSION = "${to}"`)],
-    header: ['toawowchar/toawowchar.lua', s => s.replace(`-- toawowchar ${from}\n`, `-- toawowchar ${to}\n`)],
+    lua: ['toawowchar/Core.lua', s => s.replace(`local ADDON_VERSION = "${from}"`, `local ADDON_VERSION = "${to}"`)],
+    header: ['toawowchar/Core.lua', s => s.replace(`-- toawowchar ${from}\n`, `-- toawowchar ${to}\n`)],
     readme: ['toawowchar/README.md', s => s.replace(new RegExp(`^Version ${from.replaceAll('.', '\\.')}\\b`, 'm'), `Version ${to}`)],
     changelog: ['CHANGELOG.md', s => s.replace(`## [${from}] - `, `## [${to}] - 2026-10-23\n\n${text}\n## [${from}] - `)],
   }
@@ -287,18 +308,47 @@ describe('scripts/check-bump.py', () => {
 
   it('passes when a zip file changed and the version is higher in all five places, with a CHANGELOG entry', () => {
     const dir = baseRepo()
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     bump(dir, '0.4.2')
     const r = gate(dir)
     expect(r.stderr).toBe('')
     expect(r.status).toBe(0)
-    expect(r.stdout).toMatch(/zip inputs changed against main \(.*toawowchar\/toawowchar\.lua/)
+    expect(r.stdout).toMatch(/zip inputs changed against main \(.*toawowchar\/Core\.lua/)
+  })
+
+  it('sees a file removed from the addon folder as a change of the zip', () => {
+    const dir = baseRepo()
+    writeFileSync(join(dir, 'toawowchar', 'Old.lua'), '-- gone soon\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '--quiet', '-m', 'with Old.lua')
+    rmSync(join(dir, 'toawowchar', 'Old.lua'))
+    const r = gate(dir)
+    expect(r.status).toBe(1)
+    expect(r.stderr).toContain('toawowchar/Old.lua')
+  })
+
+  it('reads the version of a base from before the split from toawowchar/toawowchar.lua', () => {
+    const dir = baseRepo()
+    const from = versionOf(dir)
+    git(dir, 'switch', '--quiet', '--create', 'old-layout')
+    git(dir, 'mv', 'toawowchar/Core.lua', 'toawowchar/toawowchar.lua')
+    git(dir, 'commit', '--quiet', '-m', 'one file, as in 0.4.x')
+    git(dir, 'switch', '--quiet', 'main')
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
+    bump(dir, '9.0.0')
+    const ok = gate(dir, 'old-layout')
+    expect(ok.stderr).toBe('')
+    expect(ok.status).toBe(0)
+    edit(dir, 'toawowchar/Core.lua', s => s.replace('local ADDON_VERSION = "9.0.0"', `local ADDON_VERSION = "${from}"`))
+    const still = gate(dir, 'old-layout')
+    expect(still.status).toBe(1)
+    expect(still.stderr).toContain(`the Lua's ADDON_VERSION is still ${from}: raise it`)
   })
 
   it('sees a change that is already committed, not only one in the working tree', () => {
     const dir = baseRepo()
     git(dir, 'switch', '--quiet', '--create', 'change')
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     git(dir, 'commit', '--quiet', '-am', 'change')
     const r = gate(dir)
     expect(r.status).toBe(1)
@@ -306,7 +356,7 @@ describe('scripts/check-bump.py', () => {
   })
 
   it.each([
-    ['toawowchar/toawowchar.lua'],
+    ['toawowchar/Core.lua'],
     ['toawowchar/toawowchar.toc'],
     ['toawowchar/README.md'],
     ['scripts/build-zip.py'],
@@ -327,7 +377,7 @@ describe('scripts/check-bump.py', () => {
     ['toc'], ['lua'], ['header'], ['readme'], ['changelog'],
   ])('fails when the version is raised everywhere but %s', place => {
     const dir = baseRepo()
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     bump(dir, '0.4.2', { skip: [place] })
     const r = gate(dir)
     expect(r.status).toBe(1)
@@ -336,7 +386,7 @@ describe('scripts/check-bump.py', () => {
 
   it('fails when the version is lower than the base\'s, even though a zip file changed', () => {
     const dir = baseRepo()
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     bump(dir, '0.4.0')
     const r = gate(dir)
     expect(r.status).toBe(1)
@@ -357,7 +407,7 @@ describe('scripts/check-bump.py', () => {
     bump(dir, '0.4.9')
     git(dir, 'commit', '--quiet', '-am', 'base 0.4.9')
     git(dir, 'switch', '--quiet', '--create', 'next')
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     bump(dir, '0.4.10')
     const r = gate(dir)
     expect(r.stderr).toBe('')
@@ -366,7 +416,7 @@ describe('scripts/check-bump.py', () => {
 
   it('fails when the new version has a CHANGELOG heading but no text', () => {
     const dir = baseRepo()
-    edit(dir, 'toawowchar/toawowchar.lua', s => `${s}-- a comment\n`)
+    edit(dir, 'toawowchar/Core.lua', s => `${s}-- a comment\n`)
     bump(dir, '0.4.2', { text: '' })
     const r = gate(dir)
     expect(r.status).toBe(1)
@@ -446,8 +496,8 @@ function nodeView(bytes) {
   return entries
 }
 
-const FILES = ['toawowchar/README.md', 'toawowchar/toawowchar.lua', 'toawowchar/toawowchar.toc']
-const ADDON_FILES = ['README.md', 'toawowchar.lua', 'toawowchar.toc']
+const FILES = ZIP_FILES.map(f => `toawowchar/${f}`)
+const ADDON_FILES = ZIP_FILES
 
 /** Builds the zip of `root` into a new directory and returns the zip's path, bytes and the script's result. */
 function buildHere(root, opts) {
@@ -479,7 +529,9 @@ describe('scripts/build-zip.py', () => {
     expect(readdirSync(join(root, 'dist')).sort()).toEqual(['SHA256SUMS', `toawowchar-${version}.zip`])
   })
 
-  it('holds exactly README.md, toawowchar.lua and toawowchar.toc under toawowchar/, in that order, with the sources\' bytes', () => {
+  it('holds exactly the files of ZIP_FILES under toawowchar/ (the README, the TOC and every Lua file it loads), in that order, with the sources\' bytes', () => {
+    expect(ZIP_FILES).toContain('Core.lua')
+    expect([...ZIP_FILES].sort()).toEqual(ZIP_FILES)
     const root = copyRepo()
     const { path, bytes } = buildHere(root)
     const view = pythonView(path)
@@ -543,7 +595,7 @@ describe('scripts/build-zip.py', () => {
 
   it('changes when a source byte changes (it is the sources that are in the zip)', () => {
     const root = syntheticRepo()
-    edit(root, 'toawowchar/toawowchar.lua', s => s.replace('return 1', 'return 2'))
+    edit(root, 'toawowchar/Core.lua', s => s.replace('return 1', 'return 2'))
     expect(sha256(buildHere(root).bytes)).not.toBe(SYNTHETIC_SHA256)
   })
 
@@ -560,7 +612,7 @@ describe('scripts/build-zip.py', () => {
 
   it('does not build from a source with a carriage return', () => {
     const root = copyRepo()
-    edit(root, 'toawowchar/toawowchar.lua', s => s.replace('\n', '\r\n'))
+    edit(root, 'toawowchar/Core.lua', s => s.replace('\n', '\r\n'))
     const out = temp()
     const r = build(root, out)
     expect(r.status).not.toBe(0)

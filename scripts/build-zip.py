@@ -6,8 +6,8 @@
     --root DIR                           build from another checkout (the tests use it)
 
 The zip is the same bytes on every machine, in every time zone, on every day:
-  * exactly three entries, in this order, under `toawowchar/`: README.md, toawowchar.lua,
-    toawowchar.toc (no directory entries, nothing else);
+  * exactly the files of ZIP_FILES (scripts/addon_info.py), in that order, under `toawowchar/`:
+    the README, every Lua file the TOC loads and the TOC (no directory entries, nothing else);
   * every entry is stamped 2026-01-01 00:00:00 (the DOS date and time, no time zone), the
     same stamp wowchar's app/build/addon-release.ts used, and has the attributes of a
     regular file, mode 0644, made by Unix;

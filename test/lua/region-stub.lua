@@ -1,4 +1,4 @@
--- Stubbed run of toawowchar/toawowchar.lua (Lua 5.1, no WoW client).
+-- Stubbed run of the addon (toawowchar/toawowchar.toc) (Lua 5.1, no WoW client).
 -- Usage: lua region-stub.lua <scenario>   (run from the repository root)
 -- Prints the export text /wowchar makes (one line) for a client that reports its
 -- region in the way the scenario says; the test parses it. A failing scenario

@@ -18,6 +18,7 @@ FOLDER = "toawowchar"
 # list (a TOC line may use "\\" between folders, as Blizzard's own TOCs do).
 ZIP_FILES = (
     "Cache.lua",
+    "Collect.lua",
     "Core.lua",
     "Data/Routes.lua",
     "Export.lua",

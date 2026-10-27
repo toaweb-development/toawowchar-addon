@@ -1405,7 +1405,9 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
     it('the code reads the interface number once, and only to report it in client.interface', () => {
       const code = codeOf()
       expect(code).not.toMatch(/WOW_PROJECT|IsClassicEra|IsClassic|IsRetail|LE_EXPANSION|GetExpansionLevel|GetClientEdition/)
-      expect(code.match(/GetBuildInfo/g)).toHaveLength(1)
+      // Export.lua reads the build and the interface for client; Collect.lua only the build of a record
+      expect(code.match(/GetBuildInfo/g)).toHaveLength(2)
+      expect(code).toContain('local ok, _, build = pcall(GetBuildInfo)')
       const lines = code.split('\n').filter(l => /\binterface\b/.test(l)).map(l => l.trim())
       expect(lines).toEqual([
         'local _, build, _, interface = GetBuildInfo()',

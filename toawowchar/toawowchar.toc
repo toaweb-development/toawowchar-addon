@@ -14,3 +14,4 @@ Data\Routes.lua
 Waypoint.lua
 Guide.lua
 UI\GuideWindow.lua
+Collect.lua

@@ -17,11 +17,11 @@ globals = {
 read_globals = {
     -- frames, chat and the UI
     "ChatFontNormal", "CreateColor", "CreateFrame", "DEFAULT_CHAT_FRAME", "GameTooltip",
-    "InCombatLockdown", "UIParent", "UISpecialFrames",
+    "InCombatLockdown", "UIParent", "UISpecialFrames", "WorldMapFrame",
     -- WoW's Lua aliases
     "time", "tinsert",
     -- the C_ namespaces
-    "C_ClassColor", "C_ClassTalents", "C_Container", "C_GameRules", "C_MajorFactions", "C_Map", "C_Navigation", "C_QuestLog",
+    "C_ClassColor", "C_ClassTalents", "C_Container", "C_GameRules", "C_MajorFactions", "C_Map", "C_Navigation", "C_QuestLine", "C_QuestLog",
     "C_Reputation", "C_SpecializationInfo", "C_SpellBook", "C_SuperTrack", "C_TaxiMap", "C_Timer",
     "C_TradeSkillUI", "C_Traits",
     -- Blizzard's Lua objects (Blizzard_ObjectAPI)
@@ -31,7 +31,10 @@ read_globals = {
     -- the player and the client
     "GetBuildInfo", "GetCVar", "GetCurrentRegion", "GetInventoryItemID", "GetInventoryItemLink",
     "GetMoney", "GetProfessionInfo", "GetProfessions", "GetRealmName", "GetTaxiMapID",
-    "GetSubZoneText", "GetXPExhaustion", "GetZoneText", "issecretvalue",
+    "GetSubZoneText", "GetXPExhaustion", "GetZoneText", "issecretvalue", "IsInInstance",
+    -- the quest frame (QUEST_DETAIL, QUEST_COMPLETE)
+    "GetNumQuestChoices", "GetObjectiveText", "GetQuestID", "GetQuestItemInfo", "GetQuestItemInfoLootType",
+    "GetTitleText",
     "UnitClass", "UnitFactionGroup", "UnitGUID", "UnitLevel", "UnitName", "UnitRace", "UnitXP",
     "UnitXPMax",
     -- global constants

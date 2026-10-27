@@ -26,6 +26,7 @@ L["PART_OFF"] = "the %s hit an error and is turned off for this session: %s" -- 
 L["PART_IS_OFF"] = "the %s is turned off for this session after an error. /reload turns it on again."
 L["PART_GUIDE"] = "guide"
 L["PART_WAYPOINT"] = "waypoint"
+L["PART_COLLECT"] = "quest data collection"
 L["UNKNOWN_ERROR"] = "unknown error"
 
 -- The export window.

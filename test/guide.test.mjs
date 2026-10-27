@@ -49,17 +49,12 @@ describe('the guide: the start comes from the race', () => {
     expect(get('start', 'not-a-string')).toEqual([false])
   })
 
-  it('the window names the start; a Skyborne route says «unconfirmed start»; a race with no route says so', () => {
-    const [human, humanText] = get('window-start', 'human')
-    expect(human).toBe('human')
-    expect(humanText[0]).toContain('Human')
-    expect(humanText.join('\n')).not.toContain('unconfirmed start')
-    for (const label of ['skyborne', 'skyborne-h']) {
-      const [key, text] = get('window-start', label)
-      expect(key).toBe(label === 'skyborne' ? 'skyborne-a' : 'skyborne-h')
-      expect(text[0]).toContain('unconfirmed start')
-    }
-    expect(get('window-start', 'none')).toEqual([false, ['Leveling guide', 'There is no leveling route for this character\'s race yet.']])
+  it('the header names the route; a Skyborne route has the orange line under it; a race with no route says so', () => {
+    const SKY = '|cffff9933Unconfirmed start. Zephras Isle is our best guess until launch.|r'
+    expect(get('window-start', 'human')).toEqual(['human', 'Human route', false, false])
+    expect(get('window-start', 'skyborne')).toEqual(['skyborne-a', 'High Order Skyborne route', SKY, false])
+    expect(get('window-start', 'skyborne-h')).toEqual(['skyborne-h', 'Windshaper Skyborne route', SKY, false])
+    expect(get('window-start', 'none')).toEqual([false, 'Leveling guide', false, 'There is no leveling route for this character\'s race yet.'])
   })
 })
 
@@ -154,22 +149,88 @@ describe('the guide window', () => {
     expect(get('window', 'toggled')).toEqual([false, false])
   })
 
-  it('shows the current step and the next two with their /way lines; a | in a name is escaped', () => {
-    const text = get('window', 'text')
-    expect(text[1]).toContain('1/9')
-    const rows = text.slice(2)
-    expect(rows).toHaveLength(3)
-    expect(rows[0]).toContain('Accept|r  Kobold Camp Cleanup from Marshal Dughan')
-    expect(rows[0]).toContain('/way Elwynn Forest 42.1 65.9  level 1')
-    expect(rows[1]).toContain('Wolves || Boars from Marshal Dughan')
-    expect(rows[2]).toContain('Do  Kobold Vermin for Kobold Camp Cleanup')
-    expect(rows[2]).toContain('/way Elwynn Forest 61.0 47.5  level 2')
+  it('shows the current step and the next two; a | in a name is escaped', () => {
+    const p = get('window', 'text')
+    expect([p.title, p.count, p.quest]).toEqual(['Human route', '|cff9d9d9d1 / 9|r', 'Kobold Camp Cleanup'])
+    expect(p.following[0][1]).toBe('|cff9d9d9dWolves || Boars · Marshal Dughan|r')
   })
 
   it('saves where it was dragged and is there, shown, after a relog; a damaged place falls back to the default', () => {
     expect(get('window', 'point')).toEqual(['TOPLEFT', 'BOTTOMLEFT', 120, 641])
     expect(get('window', 'relog')).toEqual([true, 'TOPLEFT', 'BOTTOMLEFT', 120, 641])
     expect(get('window', 'damaged-point')).toEqual(['RIGHT'])
+  })
+})
+
+describe('the panel', () => {
+  const p = (label) => get('panel', label)
+  const grey = (t) => `|cff9d9d9d${t}|r`
+  const CHECK = '|A:common-icon-checkmark:12:12:0:0:64:255:64|a'
+
+  it('header and zone line: route name in gold, the count in grey, subzone in light gold · zone, the level', () => {
+    const a = p('accept')
+    expect([a.title, a.count, a.zone, a.level]).toEqual(['Human route', grey('1 / 9'), '|cffffe8a6Goldshire|r · Elwynn Forest', 'Level 1'])
+    expect(p('grind').zone).toBe('Westfall')
+  })
+
+  it('accept: the quest-giver icon, ACCEPT, the quest, the NPC in light yellow, light blue coordinates and the distance', () => {
+    const a = p('accept')
+    expect([a.icon, a.kind, a.quest, a.detail]).toEqual(['QuestNormal', grey('ACCEPT'), 'Kobold Camp Cleanup', '|cffffff9aMarshal Dughan|r'])
+    expect([a.coords, a.distance, a.progress]).toEqual(['|cff71d5ff42.1, 65.9|r', '24 yd', 0])
+  })
+
+  it('objective: its icon and one line per objective from the quest log, updated on QUEST_LOG_UPDATE; done ones get a green check and grey text', () => {
+    const o = p('objective')
+    expect([o.icon, o.kind, o.detail, o.objectives]).toEqual(['Navigation-Tracked-Icon', grey('OBJECTIVE'), '|cffffff9aKobold Vermin|r', ['• Kobold Vermin slain: 4/10']])
+    expect(p('objective-updated')).toEqual(['• Kobold Vermin slain: 7/10'])
+    expect(p('objective-two')).toEqual([[`${CHECK} ${grey('Tough Wolf Meat: 8/8')}`, '• Boar Hide: 2/6'], 26])
+  })
+
+  it('turn in: the turn-in icon, TURN IN, both quests, the NPC and every objective checked', () => {
+    const t = p('turnin')
+    expect([t.icon, t.kind, t.quest, t.detail, t.coords]).toEqual(['UI-QuestIcon-TurnIn-Normal', grey('TURN IN'), 'Kobold Camp Cleanup and Wolves || Boars', '|cffffff9aMarshal Dughan|r', '|cff71d5ff42.1, 65.9|r'])
+    expect(t.objectives).toHaveLength(3)
+    expect(t.objectives.every(l => l.startsWith(CHECK))).toBe(true)
+  })
+
+  it('travel: a light blue arrow, no coordinates or distance, «The guide moves on when you arrive», no timer', () => {
+    const [t, noTicker] = p('travel')
+    expect([t.icon, t.tint, t.kind, t.quest, t.detail]).toEqual(['poi-traveldirections-arrow', [443, 835, 1000], grey('TRAVEL'), 'Travel to Westfall', false])
+    expect([t.coords, t.distance, noTicker]).toEqual([grey('The guide moves on when you arrive'), false, true])
+  })
+
+  it('grind: gold swords, the route\'s XP and a bar from the step\'s level to the next step\'s', () => {
+    const g = p('grind')
+    expect([g.icon, g.tint, g.kind, g.coords, g.xp, g.distance]).toEqual(['countdown-swords', [1000, 820, 0], grey('GRIND'), grey('About 900 XP · or run a dungeon'), 450, false])
+    expect(p('grind-xp')).toEqual([900])
+  })
+
+  it('the next two steps: a 16 px icon and «Quest · NPC» on one line, cut with an ellipsis', () => {
+    expect(p('accept').following).toEqual([['QuestNormal', grey('Wolves || Boars · Marshal Dughan')], ['Navigation-Tracked-Icon', grey('Kobold Camp Cleanup · Kobold Vermin')]])
+    const [cut] = p('cut')
+    expect(cut[1]).toBe(grey('A very long quest name A very long quest name A v...'))
+    expect(p('objective').following[1][1]).toBe(grey('Kobold Camp Cleanup and Wolves || Boars · Marshal...'))
+  })
+
+  it('the height follows the content; the progress bar follows the route', () => {
+    expect(p('objective').progress).toBe(222)
+    expect(p('travel')[0].height).toBeLessThan(p('accept').height)
+  })
+
+  it('the distance: a ticker every half second, the game\'s distance to our waypoint while it is super-tracked; it stops when hidden', () => {
+    expect(p('ticker')).toEqual([500, 1])
+    expect(p('tick')).toEqual(['131 yd'])
+    expect(p('not-tracked')).toEqual([false])
+    expect(p('accept-again')).toEqual([true, true])
+    expect(p('hidden')).toEqual([true])
+  })
+
+  it('in combat: the layout stays, the coordinate line says it waits, the timer stops; it all catches up when combat ends', () => {
+    const c = (label) => get('panel-combat', label)
+    const WAIT = grey('In combat: updates when combat ends')
+    expect(c('in-combat')).toEqual([WAIT, false, true, true, true])
+    expect(c('step-in-combat')).toEqual([2, true, WAIT])
+    expect(c('after-combat')).toEqual(['Wolves || Boars', '|cff71d5ff42.1, 65.9|r', '24 yd', true])
   })
 })
 

@@ -536,58 +536,140 @@ local function List(names)
     return string.format(L["LIST_AND"], table.concat(names, ", ", 1, #names - 1), names[#names])
 end
 
--- A step's text is cut here (about three lines in the window).
-local MAX_LINE = 110
+-- How long a line may be, in bytes (the window also lets the game cut a line it cannot fit).
+local MAX_TITLE = 60      -- the current step's quest names
+local MAX_DETAIL = 60     -- its NPC or objective
+local MAX_OBJECTIVE = 60  -- one objective line
+local MAX_NEXT = 52       -- a next step's whole line
+-- At most this many objective lines under the current step.
+Guide.MAX_OBJECTIVES = 4
 
--- The words of a step: what to do, and the /way line under it.
-function Guide.StepText(step)
+-- A text the game gave, or nil: a string that is not hidden from addons and not empty.
+local function GameText(fn)
+    if not fn then
+        return nil
+    end
+    local ok, value = pcall(fn)
+    if ok and type(value) == "string" and value ~= "" and not ns.IsSecret(value) then
+        return value
+    end
+    return nil
+end
+
+-- The words of step i, not yet escaped: the title (the quests, or the travel or grind note)
+-- and the detail under it (the NPC; for an objective step, the objective).
+local function Words(step)
     local data = ns.RouteData
+    local who = step[6] ~= 0 and data.texts[step[6]] or nil
+    local note = step[8] ~= 0 and data.texts[step[8]] or nil
+    local kind = step[1]
+    if kind == TRAVEL then
+        return note or L["STEP_TRAVEL"], nil
+    elseif kind == GRIND then
+        return note or L["STEP_GRIND"], nil
+    end
     local names = {}
     for i, id in ipairs(step[5]) do
         names[i] = QuestName(id)
     end
-    local quests = List(names)
-    local who = step[6] ~= 0 and data.texts[step[6]] or nil
-    local note = step[8] ~= 0 and data.texts[step[8]] or nil
-    local kind = step[1]
-    local text
-    if kind == ACCEPT then
-        text = who and string.format(L["STEP_ACCEPT_FROM"], quests, who) or string.format(L["STEP_ACCEPT"], quests)
-    elseif kind == TURNIN then
-        text = who and string.format(L["STEP_TURNIN_TO"], quests, who) or string.format(L["STEP_TURNIN"], quests)
-    elseif kind == OBJECTIVE then
-        text = note and string.format(L["STEP_OBJECTIVE_FOR"], note, quests) or string.format(L["STEP_OBJECTIVE"], quests)
-    elseif kind == TRAVEL then
-        text = note or L["STEP_TRAVEL"]
-    else
-        text = note or L["STEP_GRIND"]
+    return List(names), kind == OBJECTIVE and note or who
+end
+
+-- The quest log's objective lines of the step's quests: { text, done }, at most MAX_OBJECTIVES.
+function Guide.Objectives(step)
+    local lines = {}
+    if not (C_QuestLog and C_QuestLog.GetQuestObjectives) then
+        return lines
     end
-    local zone = data.zones[step[2]] or string.format(L["MAP_N"], step[2])
-    local way = string.format(L["WAY"], zone, step[3], step[4])
-    return Escape(Short(text, MAX_LINE)), Escape(way)
+    for _, id in ipairs(step[5]) do
+        local ok, list = pcall(C_QuestLog.GetQuestObjectives, id)
+        if ok and type(list) == "table" then
+            for _, o in ipairs(list) do
+                if type(o) == "table" and type(o.text) == "string" and o.text ~= "" and not ns.IsSecret(o.text) then
+                    lines[#lines + 1] = { text = Escape(Short(o.text, MAX_OBJECTIVE)), done = o.finished == true }
+                    if #lines >= Guide.MAX_OBJECTIVES then
+                        return lines
+                    end
+                end
+            end
+        end
+    end
+    return lines
+end
+
+-- A grind step: the XP the route says (from its note, "about 2,412 XP"), and how far the
+-- character is from the step's level to the target level (0 to 1, from UnitXP/UnitXPMax).
+local function Grind(i, step)
+    local steps = Steps()
+    local nextStep = steps[i + 1]
+    local target = nextStep and nextStep[7] or state.route.levelEnd
+    local note = step[8] ~= 0 and ns.RouteData.texts[step[8]] or ""
+    local xp = note:match("[Aa]bout ([%d,]+) XP")
+    local level = Level()
+    local part = 0
+    if UnitXP and UnitXPMax then
+        local okXp, have = pcall(UnitXP, "player")
+        local okMax, need = pcall(UnitXPMax, "player")
+        have, need = okXp and Int(have) or nil, okMax and Int(need) or nil
+        if have and need and need > 0 then
+            part = math.min(math.max(have / need, 0), 1)
+        end
+    end
+    local from = step[7]
+    local fraction
+    if target > from then
+        fraction = (level - from + part) / (target - from)
+    else
+        fraction = level >= target and 1 or part
+    end
+    return { xp = xp, target = target, fraction = math.min(math.max(fraction, 0), 1) }
 end
 
 -- Everything the window needs, or a message when there is no route.
+--   start, unconfirmed, index, total, held, level, subzone, zone
+--   current = { kind, title, detail, objectives, x, y, grind }   (nil when the route is done)
+--   following = { { kind, text }, ... }   the next two steps, one line each
 function Guide.View()
+    local view = {
+        level = Level(),
+        subzone = GameText(GetSubZoneText),
+        zone = GameText(GetZoneText),
+    }
     if not state.route then
-        return { message = L["NO_ROUTE"] }
+        view.message = L["NO_ROUTE"]
+        return view
     end
     local steps = Steps()
-    local view = {
-        start = START_LABELS[state.key] or state.key,
-        unconfirmed = state.route.confirmed == false,
-        index = state.index,
-        total = #steps,
-        held = state.held,
-        rows = {},
-    }
+    view.start = START_LABELS[state.key] or state.key
+    view.unconfirmed = state.route.confirmed == false
+    view.index = state.index
+    view.total = #steps
+    view.held = state.held
+    view.following = {}
     if state.index > #steps then
         view.message = string.format(L["ROUTE_DONE"], state.route.levelEnd)
         return view
     end
-    for i = state.index, math.min(state.index + Guide.SHOWN - 1, #steps) do
-        local text, way = Guide.StepText(steps[i])
-        view.rows[#view.rows + 1] = { n = i, kind = steps[i][1], level = steps[i][7], text = text, way = way }
+    local step = steps[state.index]
+    local title, detail = Words(step)
+    local current = {
+        kind = step[1],
+        title = Escape(Short(title, MAX_TITLE)),
+        detail = detail and Escape(Short(detail, MAX_DETAIL)) or nil,
+        x = step[3],
+        y = step[4],
+        level = step[7],
+    }
+    if step[1] == OBJECTIVE or step[1] == TURNIN then
+        current.objectives = Guide.Objectives(step)
+    elseif step[1] == GRIND then
+        current.grind = Grind(state.index, step)
+    end
+    view.current = current
+    for i = state.index + 1, math.min(state.index + Guide.SHOWN - 1, #steps) do
+        local t, d = Words(steps[i])
+        local line = d and string.format(L["NEXT_LINE"], t, d) or t
+        view.following[#view.following + 1] = { kind = steps[i][1], text = Escape(Short(line, MAX_NEXT)) }
     end
     return view
 end
@@ -603,6 +685,13 @@ end
 ---------------------------------------------------------------------------
 
 local handlers = {}
+
+-- The window draws the view again (when shown; after combat when in combat).
+local function Redraw()
+    if ns.GuideWindow then
+        ns.GuideWindow.Update()
+    end
+end
 
 function handlers.PLAYER_ENTERING_WORLD()
     if not state.started then
@@ -639,6 +728,11 @@ function handlers.QUEST_LOG_UPDATE()
     if step and (step[1] == OBJECTIVE or step[1] == ACCEPT) then
         Guide.Settle()
     end
+    -- The objective lines (x/10) of the step now shown.
+    step = Guide.Current()
+    if step and (step[1] == OBJECTIVE or step[1] == TURNIN) then
+        Redraw()
+    end
 end
 
 function handlers.UNIT_QUEST_LOG_CHANGED(unit)
@@ -656,6 +750,7 @@ local function ZoneChanged()
     if step and step[1] == TRAVEL then
         Guide.Settle()
     end
+    Redraw() -- the zone line
 end
 handlers.ZONE_CHANGED_NEW_AREA = ZoneChanged
 handlers.ZONE_CHANGED = ZoneChanged
@@ -667,6 +762,20 @@ function handlers.PLAYER_LEVEL_UP(level)
         state.level = n
     end
     Guide.Settle()
+    Redraw() -- the zone line's level, a grind step's bar
+end
+
+function handlers.PLAYER_XP_UPDATE(unit)
+    local step = Guide.Current()
+    if (unit == nil or unit == "player") and step and step[1] == GRIND then
+        Redraw()
+    end
+end
+
+function handlers.PLAYER_REGEN_DISABLED()
+    if ns.GuideWindow then
+        ns.GuideWindow.CombatStarted()
+    end
 end
 
 function handlers.PLAYER_REGEN_ENABLED()

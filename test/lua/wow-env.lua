@@ -38,7 +38,8 @@ local METHODS = {
     "StartMoving", "StopMovingOrSizing", "SetBackdrop", "SetAlpha", "SetParent",
     -- text and textures
     "SetTextColor", "SetJustifyH", "SetJustifyV", "SetFontObject", "SetColorTexture",
-    "SetWordWrap",
+    "SetWordWrap", "SetMaxLines", "SetHighlightAtlas", "SetStatusBarTexture", "SetBackdropBorderColor",
+    "SetMinMaxValues",
     -- edit boxes and scroll frames
     "SetMultiLine", "SetAutoFocus", "SetMaxLetters", "SetMaxBytes", "SetScrollChild",
     "ClearFocus", "SetFocus", "HighlightText", "SetCursorPosition",
@@ -82,6 +83,10 @@ local function newTexture(parent)
         if key == "Hide" then return function(self) self.shown = false end end
         if key == "Show" then return function(self) self.shown = true end end
         if key == "SetPoint" then return function(self, ...) self.points[#self.points + 1] = { ... } end end
+        if key == "SetAtlas" then return function(self, atlas) self.atlas = atlas end end
+        if key == "SetVertexColor" then return function(self, r, g, b) self.tint = { r, g, b } end end
+        if key == "SetGradient" then return function(self, orientation, from, to) self.gradient = { orientation, from, to } end end
+        if key == "ClearAllPoints" then return function(self) self.points = {} end end
         if noop[key] then return function(self) return self end end
         return nil
     end })
@@ -93,6 +98,7 @@ fontMethods.SetPoint = function(self, ...) self.points[#self.points + 1] = { ...
 fontMethods.SetTextColor = function(self, r, g, b) self.color = { r, g, b } end
 fontMethods.Hide = function(self) self.shown = false end
 fontMethods.Show = function(self) self.shown = true end
+fontMethods.ClearAllPoints = function(self) self.points = {} end
 
 frameMethods.SetScript = function(self, name, fn) self.scripts[name] = fn end
 frameMethods.GetScript = function(self, name) return self.scripts[name] end
@@ -148,6 +154,8 @@ frameMethods.RegisterEvent = function(self, event)
     self.events[event] = true
 end
 frameMethods.UnregisterAllEvents = function(self) self.events = {} end
+frameMethods.SetNormalAtlas = function(self, atlas) self.atlas = atlas end
+frameMethods.SetValue = function(self, v) self.value = v end
 
 local frameMeta = {
     __index = function(self, key)

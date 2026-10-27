@@ -82,7 +82,35 @@ C_SuperTrack = {
         game.calls[#game.calls + 1] = { "track", on }
         game.superTracked = on
     end,
+    IsSuperTrackingUserWaypoint = function() return game.superTracked == true end,
 }
+C_Navigation = { GetDistance = function() return game.distance end }
+GetSubZoneText = function() return game.subzone end
+GetZoneText = function() return game.zone end
+UnitXP = function() return game.xp end
+UnitXPMax = function() return game.xpMax end
+game.distance, game.subzone, game.zone, game.xp, game.xpMax = 24.4, "Goldshire", "Elwynn Forest", 450, 1000
+
+-- C_Timer.NewTicker only (no After: the cache then reads at once, as before). Each ticker is
+-- kept in `tickers` with its interval; tick(t) runs it once.
+local tickers = {}
+C_Timer = { NewTicker = function(seconds, fn)
+    local t = { seconds = seconds, fn = fn, cancelled = false }
+    function t.Cancel(self) self.cancelled = true end
+    tickers[#tickers + 1] = t
+    return t
+end }
+-- The ticker that is running now, or nil.
+local function running()
+    local live
+    for _, t in ipairs(tickers) do
+        if not t.cancelled then
+            assert(live == nil, "two tickers run at once")
+            live = t
+        end
+    end
+    return live
+end
 
 -- ── the route ───────────────────────────────────────────────────────────
 -- { kind, uiMapId, x, y, questIds, name, level, text }; T holds the names and notes.
@@ -137,9 +165,34 @@ local function frameText()
     local lines = {}
     if not f then return lines end
     for _, fs in ipairs(Env.fontStrings) do
-        if fs.parent == f and fs.text and fs.text ~= "" then lines[#lines + 1] = fs.text end
+        if fs.parent == f and fs.shown and fs.text and fs.text ~= "" then lines[#lines + 1] = fs.text end
     end
     return lines
+end
+
+-- What the panel shows, region by region (false: hidden or empty). Fractions as per mille:
+-- the serializer writes whole numbers only.
+local function permille(v) return v and math.floor(v * 1000 + 0.5) or false end
+local function panel()
+    local w = Env.ns.GuideWindow.Widgets()
+    local function t(fs) return fs.shown and fs.text and fs.text ~= "" and fs.text or false end
+    local function tint(tx) return tx.tint and { permille(tx.tint[1]), permille(tx.tint[2]), permille(tx.tint[3]) } or false end
+    local objectives, following = {}, {}
+    for _, fs in ipairs(w.objectives) do
+        if t(fs) then objectives[#objectives + 1] = fs.text end
+    end
+    for _, row in ipairs(w.following) do
+        if t(row.text) then following[#following + 1] = { row.icon.atlas, row.text.text } end
+    end
+    return {
+        title = t(w.title), count = t(w.count), note = t(w.note), zone = t(w.zone), level = t(w.level),
+        icon = w.icon.shown and w.icon.atlas or false, tint = tint(w.icon),
+        kind = t(w.kind), quest = t(w.quest), detail = t(w.detail), objectives = objectives,
+        coords = t(w.coords), distance = t(w.distance), xp = w.xp.shown and permille(w.xp.value) or false,
+        following = following, message = t(w.message),
+        progress = w.progress.shown and permille(w.progress.value) or false,
+        height = Env.ns.GuideWindow.Frame().height,
+    }
 end
 
 local function shown()
@@ -171,7 +224,8 @@ elseif scenario == "window-start" then
         load()
         login()
         Env.slash("/wowchar guide")
-        return { G().state.key or false, frameText() }
+        local p = panel()
+        return { G().state.key or false, p.title, p.note, p.message }
     end
     emit("human", windowFor("Human", "Alliance"))
     emit("skyborne", windowFor("High Order Skyborne", "Alliance"))
@@ -278,7 +332,7 @@ elseif scenario == "buttons" then
     local f = Env.ns.GuideWindow.Frame()
     local buttons = {}
     for _, child in ipairs(Env.frames) do
-        if child.parent == f and child.kind == "Button" then buttons[child.text] = child end
+        if child.parent == f and child.kind == "Button" then buttons[child.label] = child end
     end
     emit("labels", { buttons.Back ~= nil, buttons.Skip ~= nil, buttons.Hide ~= nil })
     buttons.Skip.scripts.OnClick(buttons.Skip)
@@ -312,7 +366,7 @@ elseif scenario == "buttons" then
     local f2 = Env.ns.GuideWindow.Frame()
     local hide
     for _, child in ipairs(Env.frames) do
-        if child.parent == f2 and child.kind == "Button" and child.text == "Hide" then hide = child end
+        if child.parent == f2 and child.kind == "Button" and child.label == "Hide" then hide = child end
     end
     hide.scripts.OnClick(hide)
     emit("hidden", { shown(), toawowcharDB.guide.shown })
@@ -324,7 +378,7 @@ elseif scenario == "window" then
     emit("before-command", { shown() })
     Env.slash("/wowchar guide")
     emit("after-command", { shown(), toawowcharDB.guide.shown })
-    emit("text", frameText())
+    emit("text", panel())
     local f = Env.ns.GuideWindow.Frame()
     f.scripts.OnDragStart(f)
     f:ClearAllPoints()
@@ -427,7 +481,7 @@ elseif scenario == "failsafe" then
     end
     local function button(label)
         for _, f in ipairs(Env.frames) do
-            if f.kind == "Button" and f.parent == Env.ns.GuideWindow.Frame() and f.text == label then return f end
+            if f.kind == "Button" and f.parent == Env.ns.GuideWindow.Frame() and f.label == label then return f end
         end
     end
     local function fresh()
@@ -562,16 +616,94 @@ elseif scenario == "part" then
     local ok = pcall(r.Call, error, "x")
     DEFAULT_CHAT_FRAME = chat
     emit("chat-raises", { ok, cleaned, r.IsOff() })
-    -- the window fails half made (its buttons' template is missing): hidden, and the guide off
+    -- the window fails half made (CreateColor raises in the middle of it): hidden, and the guide off
     Env.relog()
     toawowcharDB = nil
-    Env.missingTemplates.UIPanelButtonTemplate = true
     load()
     login()
+    CreateColor = function() error("no colour", 0) end
     local answered = Env.slash("/wowchar guide")
-    Env.missingTemplates.UIPanelButtonTemplate = nil
+    CreateColor = nil
     local f = Env.ns.GuideWindow.Frame()
     emit("half-window", { answered, f ~= nil, f ~= nil and f.shown, Env.ns.Guide.part.IsOff() })
+
+elseif scenario == "panel" then
+    -- The panel, step kind by step kind, on the made-up route (Human, Elwynn Forest).
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    emit("accept", panel())
+    local acceptHeight = panel().height
+    -- the distance ticker: every half second at most; it reads the game's distance to our waypoint
+    local t = running()
+    emit("ticker", { t ~= nil and permille(t.seconds), #tickers })
+    game.distance = 130.6
+    t.fn()
+    emit("tick", { panel().distance })
+    game.superTracked = false
+    t.fn()
+    emit("not-tracked", { panel().distance })
+    game.superTracked = true
+    -- the next steps: one line each, cut with an ellipsis
+    Env.ns.RouteData.quests[102] = string.rep("A very long quest name ", 4)
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.ns.GuideWindow.Update()
+    emit("cut", panel().following)
+    Env.ns.RouteData.quests[102] = "Wolves | Boars"
+    -- objective: the quest log's lines, updated on QUEST_LOG_UPDATE
+    game.log[101] = { objectives = { { "Kobold Vermin slain: 4/10", false } } }
+    Env.fire("QUEST_ACCEPTED", 101)
+    game.log[102] = { objectives = { { "Tough Wolf Meat: 8/8", true }, { "Boar Hide: 2/6", false } } }
+    Env.fire("QUEST_ACCEPTED", 102)
+    emit("objective", panel())
+    game.log[101].objectives[1][1] = "Kobold Vermin slain: 7/10"
+    Env.fire("QUEST_LOG_UPDATE")
+    emit("objective-updated", panel().objectives)
+    game.log[101] = { complete = true, objectives = { { "Kobold Vermin slain: 10/10", true } } }
+    Env.fire("QUEST_LOG_UPDATE")
+    local two = panel()
+    emit("objective-two", { two.objectives, two.height - acceptHeight })
+    -- turn-in
+    game.log[102] = { complete = true, objectives = { { "Tough Wolf Meat: 8/8", true }, { "Boar Hide: 6/6", true } } }
+    Env.fire("QUEST_LOG_UPDATE")
+    emit("turnin", panel())
+    -- travel: no coordinates, no distance, no ticker
+    game.completed[101], game.completed[102], game.log = true, true, {}
+    Env.fire("QUEST_TURNED_IN", 101)
+    Env.fire("QUEST_TURNED_IN", 102)
+    emit("travel", { panel(), running() == nil })
+    -- grind: the route's XP and a bar from the step's level (4) to the next step's (5)
+    game.map, game.level, game.subzone, game.zone = 1436, 4, "", "Westfall"
+    Env.fire("ZONE_CHANGED_NEW_AREA")
+    emit("grind", panel())
+    game.xp = 900
+    Env.fire("PLAYER_XP_UPDATE", "player")
+    emit("grind-xp", { panel().xp })
+    -- hidden: the ticker stops; shown on an accept step it runs again
+    game.level = 5
+    local before = #tickers
+    Env.fire("PLAYER_LEVEL_UP", 5)
+    emit("accept-again", { running() ~= nil, #tickers > before })
+    Env.slash("/wowchar guide")
+    emit("hidden", { running() == nil })
+
+elseif scenario == "panel-combat" then
+    -- In combat the layout stays; the coordinate line says it waits; it all catches up after.
+    load()
+    login()
+    Env.slash("/wowchar guide")
+    local before = panel()
+    Env.combat = true
+    Env.fire("PLAYER_REGEN_DISABLED")
+    local during = panel()
+    emit("in-combat", { during.coords, during.distance, during.height == before.height, during.quest == before.quest, running() == nil })
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    emit("step-in-combat", { index(), panel().quest == before.quest, panel().coords })
+    Env.combat = false
+    Env.fire("PLAYER_REGEN_ENABLED")
+    local after = panel()
+    emit("after-combat", { after.quest, after.coords, after.distance, running() ~= nil })
 
 elseif scenario == "migration" then
     -- dbVersion 1 (0.4.x: realms at the top) becomes 2; the cache survives; a newer file is left alone.

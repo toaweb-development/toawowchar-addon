@@ -16,12 +16,12 @@ globals = {
 -- game call goes here in the same change (and is guarded in the Lua, AGENTS.md).
 read_globals = {
     -- frames, chat and the UI
-    "ChatFontNormal", "CreateFrame", "DEFAULT_CHAT_FRAME", "InCombatLockdown",
-    "UIParent", "UISpecialFrames",
+    "ChatFontNormal", "CreateColor", "CreateFrame", "DEFAULT_CHAT_FRAME", "GameTooltip",
+    "InCombatLockdown", "UIParent", "UISpecialFrames",
     -- WoW's Lua aliases
     "time", "tinsert",
     -- the C_ namespaces
-    "C_ClassTalents", "C_Container", "C_GameRules", "C_MajorFactions", "C_Map", "C_QuestLog",
+    "C_ClassColor", "C_ClassTalents", "C_Container", "C_GameRules", "C_MajorFactions", "C_Map", "C_Navigation", "C_QuestLog",
     "C_Reputation", "C_SpecializationInfo", "C_SpellBook", "C_SuperTrack", "C_TaxiMap", "C_Timer",
     "C_TradeSkillUI", "C_Traits",
     -- Blizzard's Lua objects (Blizzard_ObjectAPI)
@@ -31,11 +31,11 @@ read_globals = {
     -- the player and the client
     "GetBuildInfo", "GetCVar", "GetCurrentRegion", "GetInventoryItemID", "GetInventoryItemLink",
     "GetMoney", "GetProfessionInfo", "GetProfessions", "GetRealmName", "GetTaxiMapID",
-    "GetXPExhaustion", "issecretvalue",
+    "GetSubZoneText", "GetXPExhaustion", "GetZoneText", "issecretvalue",
     "UnitClass", "UnitFactionGroup", "UnitGUID", "UnitLevel", "UnitName", "UnitRace", "UnitXP",
     "UnitXPMax",
     -- global constants
-    "BANK_CONTAINER", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "PVP_RANK_POINTS_FACTION_ID",
+    "BANK_CONTAINER", "NUM_BAG_SLOTS", "NUM_BANKBAGSLOTS", "PVP_RANK_POINTS_FACTION_ID", "RAID_CLASS_COLORS",
 }
 
 -- Generated data (scripts/fetch-routes.py): an objective note is one string on one line, up to

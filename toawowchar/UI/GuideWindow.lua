@@ -6,6 +6,8 @@
 -- Combat: no frame is made, shown, hidden, moved or written to while InCombatLockdown() is
 -- true. What would change is remembered and done once on PLAYER_REGEN_ENABLED; a drag does
 -- not start in combat. The waypoint is not a frame and follows the step at once.
+-- Errors: every way in (the guide's events, /wowchar guide, the buttons, the drag) runs through
+-- the guide's part; the waypoint is a part of its own (Waypoint.lua).
 --
 -- Frame API (Gethe/wow-ui-source, branch forever, ca8368f): CreateFrame, SetMovable,
 -- EnableMouse, RegisterForDrag, StartMoving, StopMovingOrSizing, GetPoint, ClearAllPoints,
@@ -21,6 +23,8 @@ local DB = ns.DB
 local InCombat = ns.InCombat
 local Guide = ns.Guide
 local Waypoint = ns.Waypoint
+-- The guide's part (Core.lua, Part): the buttons and the drag run through it, like its events.
+local part = ns.Part("guide", L["PART_GUIDE"])
 
 local GuideWindow = {}
 ns.GuideWindow = GuideWindow
@@ -82,7 +86,7 @@ local function Button(parent, label, anchor, x, onClick)
     button:SetSize(96, 22)
     button:SetPoint(anchor, x, 10)
     button:SetText(label)
-    button:SetScript("OnClick", onClick)
+    button:SetScript("OnClick", part.Wrap(onClick))
     return button
 end
 
@@ -98,15 +102,15 @@ local function Create()
     f:EnableMouse(true)
     f:SetClampedToScreen(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self)
+    f:SetScript("OnDragStart", part.Wrap(function(self)
         if not InCombat() then
             self:StartMoving()
         end
-    end)
-    f:SetScript("OnDragStop", function(self)
+    end))
+    f:SetScript("OnDragStop", part.Wrap(function(self)
         self:StopMovingOrSizing()
         SavePoint()
-    end)
+    end))
 
     -- Indigo (#131129) at 90 percent, with a primary (#8B7CFF) line on top.
     local background = f:CreateTexture(nil, "BACKGROUND")

@@ -21,7 +21,8 @@
 -- Chat: the addon says one short line when it has cached something new (the
 -- bank, a profession's recipes, flight paths), one when /wowchar is typed in
 -- combat (the window then opens when combat ends) and one for "/wowchar reset".
--- It says nothing else; the snapshot of the equipped items, bags, completed
+-- It also says one line when the guide or the waypoint hits an error and turns off
+-- (Part, below). It says nothing else; the snapshot of the equipped items, bags, completed
 -- quests, professions and player numbers that game events keep current (see
 -- Snapshot) is silent.
 --
@@ -333,6 +334,118 @@ local function Say(message)
     end
 end
 
+---------------------------------------------------------------------------
+-- Parts that fail on their own
+---------------------------------------------------------------------------
+-- The guide, the waypoint and (later) the data collection are parts: each starts and hears its
+-- events only through its own Part, so an error in one is caught there. On the first error
+-- the part says so in one chat line and is off until /reload; the other parts, the export
+-- and the cache go on. The export is not a part: it runs as before, and nothing here touches
+-- its state (scan, session, the cache).
+--
+--   local part = ns.Part("guide", L["PART_GUIDE"])
+--   part.Call(fn, ...)   runs fn(...) in pcall; its results, or nothing when off or on error
+--   part.Wrap(fn)        a function that does part.Call(fn, ...) (event and click scripts)
+--   part.OnFail(fn)      run once (in pcall) when the part turns off: unregister, hide, clear
+--   part.IsOff(), part.SayOff()
+
+local ERROR_MAX = 200
+
+-- The error as one short line for the chat: no control characters, every | doubled (no
+-- escape code reaches the chat frame), at most ERROR_MAX bytes cut on a character boundary.
+local function ErrorLine(err)
+    local text
+    if type(err) == "string" then
+        text = err
+    elseif not IsSecret(err) then
+        local ok, s = pcall(tostring, err)
+        text = ok and type(s) == "string" and s or nil
+    end
+    if not text then
+        return L["UNKNOWN_ERROR"]
+    end
+    text = text:gsub("[%z\1-\31\127]", " "):match("^%s*(.-)%s*$")
+    if #text > ERROR_MAX then
+        local n = ERROR_MAX
+        while n > 0 do
+            local b = text:byte(n + 1)
+            if b and b >= 0x80 and b < 0xC0 then
+                n = n - 1
+            else
+                break
+            end
+        end
+        text = text:sub(1, n) .. "..."
+    end
+    if text == "" then
+        return L["UNKNOWN_ERROR"]
+    end
+    return (text:gsub("|", "||"))
+end
+
+local parts = {}
+
+local function Part(name, label)
+    if parts[name] then
+        return parts[name]
+    end
+    local part = {}
+    local off = false
+    local onFail = {}
+
+    local function Fail(err)
+        if off then
+            return
+        end
+        off = true
+        Say(string.format(L["PART_OFF"], label, ErrorLine(err)))
+        for _, fn in ipairs(onFail) do
+            pcall(fn)
+        end
+    end
+
+    -- pcall's results without its first: the function's own results, or nothing on error.
+    local function Results(ok, ...)
+        if ok then
+            return ...
+        end
+        Fail((...))
+    end
+
+    function part.Call(fn, ...)
+        if off then
+            return
+        end
+        if type(fn) ~= "function" then
+            Fail("not loaded")
+            return
+        end
+        return Results(pcall(fn, ...))
+    end
+
+    function part.Wrap(fn)
+        return function(...)
+            return part.Call(fn, ...)
+        end
+    end
+
+    function part.OnFail(fn)
+        onFail[#onFail + 1] = fn
+    end
+
+    function part.IsOff()
+        return off
+    end
+
+    -- The chat line for a player who asks for a part that is off (/wowchar guide).
+    function part.SayOff()
+        Say(string.format(L["PART_IS_OFF"], label))
+    end
+
+    parts[name] = part
+    return part
+end
+
 -- The keys of a set as a sorted list, cut at `cap`. Second result: true when cut.
 local function SortedKeys(set, cap)
     local list = {}
@@ -518,6 +631,7 @@ ns.Fit = Fit
 ns.Now = Now
 ns.InCombat = InCombat
 ns.Say = Say
+ns.Part = Part
 ns.SortedKeys = SortedKeys
 ns.SameSet = SameSet
 ns.Live = Live
@@ -615,9 +729,15 @@ local function Command(message)
         return
     end
     -- /wowchar guide shows or hides the leveling guide; it holds its own frame changes back in
-    -- combat (UI/GuideWindow.lua), so it does not wait like the export does.
+    -- combat (UI/GuideWindow.lua), so it does not wait like the export does. It runs as the
+    -- guide part: an error there turns the guide off, never this command or the export.
     if word == "guide" then
-        ns.Guide.Toggle()
+        local guide = Part("guide", L["PART_GUIDE"])
+        if guide.IsOff() then
+            guide.SayOff()
+        else
+            guide.Call(ns.Guide and ns.Guide.Toggle)
+        end
         return
     end
     -- In combat the game hides values from addons: wait until it ends.

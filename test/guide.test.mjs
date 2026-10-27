@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from './lib/suite.mjs'
 import { expect } from './lib/expect.mjs'
@@ -199,6 +200,77 @@ describe('the guide in combat', () => {
     expect(get('combat', 'drag-in-combat')).toEqual([false])
     expect(get('combat', 'hide-in-combat')).toEqual([true])
     expect(get('combat', 'hidden-after')).toEqual([false])
+  })
+})
+
+describe('a guide or waypoint that hits an error: one chat line, that part off until /reload', () => {
+  const LABEL = '|cff8B7CFFtoawowchar:|r '
+  const off = (what, message) => `${LABEL}the ${what} hit an error and is turned off for this session: ${message}`
+  const IS_OFF = `${LABEL}the guide is turned off for this session after an error. /reload turns it on again.`
+  const f = (label) => get('failsafe', label)
+
+  it('at its start: one line with the error, then no handler runs; /wowchar guide says it is off', () => {
+    expect(f('start-error')).toEqual([[off('guide', 'test/lua/guide-test.lua:445: route data broken on purpose')], 0, true, true])
+    expect(f('command-when-off')).toEqual([[off('guide', 'test/lua/guide-test.lua:445: route data broken on purpose'), IS_OFF], true])
+  })
+
+  it('in an event handler while shown: the window hides, the guide\'s waypoint is cleared, its events stop', () => {
+    const [before, lines, shown, calls, cleared, handled, count] = f('event-error')
+    expect(before).toEqual([true, true])
+    expect(lines).toEqual([off('guide', 'test/lua/guide-test.lua:464: settle broke')])
+    expect([shown, calls, cleared, handled, count]).toEqual([false, [['clear']], true, 0, 1])
+  })
+
+  it('in a button and in /wowchar guide: the same, and the command still answers', () => {
+    expect(f('button-error')).toEqual([[off('guide', 'test/lua/guide-test.lua:479: skip broke')], false, true])
+    expect(f('command-error')).toEqual([true, [off('guide', 'test/lua/guide-test.lua:487: toggle broke'), IS_OFF]])
+  })
+
+  it('in the waypoint: only the waypoint turns off (its marker cleared); the guide goes on without it', () => {
+    const [[lines, calls], step, shown, later, guideOff, count] = f('waypoint-error')
+    expect(lines).toEqual([off('waypoint', 'test/lua/guide-test.lua:495: super track broke')])
+    expect(calls).toEqual([['set', 1429, 421, 659], ['clear']])
+    expect([step, shown, later, guideOff, count]).toEqual([3, true, [], false, 1])
+  })
+
+  it('the line has no escape code (every | doubled), no line break, and is cut at 200 bytes', () => {
+    const [line] = f('message')
+    expect(f('message')).toHaveLength(1)
+    const message = line.slice(off('guide', '').length)
+    expect(message.startsWith('a ||cffff0000red||r line with a newline xxx')).toBe(true)
+    expect(message).not.toContain('\n')
+    expect(message.replace(/\|\|/g, '|').length).toBe(203)
+    expect(message.endsWith('x...')).toBe(true)
+  })
+
+  it('a new session has the guide again, shown as it was saved', () => {
+    expect(f('after-reload')).toEqual([false, true, true, 0])
+  })
+})
+
+describe('the export and the cache do not depend on the guide', () => {
+  const FIXTURE = readFileSync(new URL('./fixtures/export-full.txt', import.meta.url), 'utf8').replace(/\n$/, '')
+  const run = (mode) => {
+    const r = spawnSync('lua', ['test/lua/export-full.lua', mode], { cwd: ROOT, encoding: 'utf8' })
+    if (r.error) throw r.error
+    expect(r.stderr).toBe('')
+    expect(r.status).toBe(0)
+    const [text, chat, state] = r.stdout.replace(/\n$/, '').split('\n')
+    return { text, chat: JSON.parse(chat), state: JSON.parse(state) }
+  }
+
+  it.each([
+    ['guide-start-error', false, 'the guide fails at its start (its route data raises)'],
+    ['guide-event-error', 'dwarf-gnome', 'the guide starts on its real route, then fails in an event handler'],
+  ])('%s: /wowchar gives the same text as test/fixtures/export-full.txt (%s)', (mode, key) => {
+    const { text, chat, state } = run(mode)
+    expect(text).toBe(FIXTURE)
+    expect(state).toEqual([key, true])
+    const hit = chat.filter(l => l.includes('hit an error'))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain('the guide hit an error and is turned off for this session: ')
+    // the bank and the flight map, read after the guide failed, are still saved
+    expect(chat).toContain('|cff8B7CFFtoawowchar:|r saved 3 flight paths.')
   })
 })
 

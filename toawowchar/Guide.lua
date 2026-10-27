@@ -675,17 +675,42 @@ function handlers.PLAYER_REGEN_ENABLED()
     end
 end
 
-local frame = CreateFrame("Frame")
-frame:SetScript("OnEvent", function(_, event, ...)
-    local handler = handlers[event]
-    if handler then
-        handler(...)
+-- The guide is a part (Core.lua, Part): it starts on PLAYER_ENTERING_WORLD inside its event
+-- script, and that script, /wowchar guide and the window's buttons all run through the part.
+-- On the first error it says so in chat and turns off until /reload: its events are
+-- unregistered, the window hides (a plain frame: Hide is allowed in combat) and its waypoint
+-- is cleared. The export and the cache do not depend on it.
+local part = ns.Part("guide", L["PART_GUIDE"])
+Guide.part = part
+
+local frame
+part.OnFail(function()
+    state.route = nil
+    if frame then
+        pcall(frame.UnregisterAllEvents, frame)
+    end
+    local window = ns.GuideWindow and ns.GuideWindow.Frame and ns.GuideWindow.Frame()
+    if window then
+        pcall(window.Hide, window)
+    end
+    if ns.Waypoint then
+        ns.Waypoint.Clear()
     end
 end)
--- An event name the client does not know raises an error, so each is tried alone.
-for event in pairs(handlers) do
-    pcall(frame.RegisterEvent, frame, event)
-end
+
+part.Call(function()
+    frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", part.Wrap(function(_, event, ...)
+        local handler = handlers[event]
+        if handler then
+            handler(...)
+        end
+    end))
+    -- An event name the client does not know raises an error, so each is tried alone.
+    for event in pairs(handlers) do
+        pcall(frame.RegisterEvent, frame, event)
+    end
+end)
 
 -- /wowchar guide
 function Guide.Toggle()

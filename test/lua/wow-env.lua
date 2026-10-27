@@ -147,6 +147,7 @@ frameMethods.RegisterEvent = function(self, event)
     self.events = self.events or {}
     self.events[event] = true
 end
+frameMethods.UnregisterAllEvents = function(self) self.events = {} end
 
 local frameMeta = {
     __index = function(self, key)

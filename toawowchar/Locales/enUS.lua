@@ -21,6 +21,13 @@ L["FLIGHT_PATHS"] = "flight paths"
 L["RESET_DONE"] = "cleared the saved data of this character."
 L["OPENS_AFTER_COMBAT"] = "in combat. The export window opens when combat ends."
 
+-- A part that hit an error (Core.lua, Part): it is off until /reload; the export is not a part.
+L["PART_OFF"] = "the %s hit an error and is turned off for this session: %s" -- PART_GUIDE or PART_WAYPOINT, the error
+L["PART_IS_OFF"] = "the %s is turned off for this session after an error. /reload turns it on again."
+L["PART_GUIDE"] = "guide"
+L["PART_WAYPOINT"] = "waypoint"
+L["UNKNOWN_ERROR"] = "unknown error"
+
 -- The export window.
 L["EXPORT_TITLE"] = "wowchar export"
 L["EXPORT_HEADER"] = "Export text (selected: press Ctrl+C to copy)"

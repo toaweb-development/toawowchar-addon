@@ -415,6 +415,109 @@ elseif scenario == "combat" then
     Env.fire("PLAYER_REGEN_ENABLED")
     emit("hidden-after", { shown() })
 
+elseif scenario == "failsafe" then
+    -- The guide and the waypoint are parts (Core.lua, Part): the first error says one chat line
+    -- and turns only that part off until /reload.
+    local function guideLines()
+        local list = {}
+        for _, line in ipairs(Env.chat) do
+            if line:find("the guide ", 1, true) or line:find("the waypoint ", 1, true) then list[#list + 1] = line end
+        end
+        return list
+    end
+    local function button(label)
+        for _, f in ipairs(Env.frames) do
+            if f.kind == "Button" and f.parent == Env.ns.GuideWindow.Frame() and f.text == label then return f end
+        end
+    end
+    local function fresh()
+        Env.relog()
+        toawowcharDB = nil
+        game.completed, game.log, game.map, game.level = {}, {}, 1429, 1
+        game.calls, game.waypoint = {}, nil
+        load()
+    end
+    local calls = 0
+    local function counting() calls = calls + 1 end
+
+    -- 1. at the start: route data that raises on every read
+    load()
+    Env.ns.RouteData = setmetatable({}, { __index = function() error("route data broken on purpose") end })
+    login()
+    local afterStart = guideLines()
+    Env.ns.Guide.Settle = counting
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.fire("PLAYER_LEVEL_UP", 2)
+    Env.fire("PLAYER_ENTERING_WORLD", false, true)
+    emit("start-error", { afterStart, calls, Env.ns.Guide.part.IsOff(), Env.ns.Waypoint.Mine() == nil })
+    Env.slash("/wowchar guide")
+    emit("command-when-off", { guideLines(), Env.ns.GuideWindow.Frame() == nil })
+
+    -- 2. in an event handler, while shown: the window hides, its waypoint goes, events stop
+    fresh()
+    login()
+    Env.slash("/wowchar guide")
+    local before = { shown(), Env.ns.Waypoint.Mine() ~= nil }
+    game.calls = {}
+    Env.ns.Guide.Settle = function() error("settle broke") end
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    local line = guideLines()
+    calls = 0
+    Env.ns.Guide.Settle = counting
+    Env.fire("QUEST_ACCEPTED", 101)
+    Env.fire("QUEST_TURNED_IN", 101)
+    Env.fire("ZONE_CHANGED_NEW_AREA")
+    emit("event-error", { before, line, shown(), game.calls, game.waypoint == nil, calls, #guideLines() })
+
+    -- 3. a button
+    fresh()
+    login()
+    Env.slash("/wowchar guide")
+    Env.ns.Guide.Skip = function() error("skip broke") end
+    button("Skip").scripts.OnClick(button("Skip"))
+    button("Back").scripts.OnClick(button("Back"))
+    emit("button-error", { guideLines(), shown(), Env.ns.Guide.part.IsOff() })
+
+    -- 4. /wowchar guide itself (an error in Toggle); the command and the export go on
+    fresh()
+    login()
+    Env.ns.Guide.Toggle = function() error("toggle broke") end
+    local answered = Env.slash("/wowchar guide")
+    Env.slash("/wowchar guide")
+    emit("command-error", { answered, guideLines() })
+
+    -- 5. the waypoint alone: the guide goes on without the marker
+    fresh()
+    local superTrack = C_SuperTrack
+    C_SuperTrack = setmetatable({}, { __index = function() error("super track broke") end })
+    login()
+    Env.slash("/wowchar guide")
+    local first = { guideLines(), game.calls }
+    game.calls = {}
+    game.log[101] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 101)
+    game.log[102] = { objectives = {} }
+    Env.fire("QUEST_ACCEPTED", 102)
+    emit("waypoint-error", { first, index(), shown(), game.calls, Env.ns.Guide.part.IsOff(), #guideLines() })
+    C_SuperTrack = superTrack
+
+    -- 6. the message: one line, no escape codes, cut
+    fresh()
+    login()
+    Env.slash("/wowchar guide")
+    Env.ns.Guide.Back = function() error("a |cffff0000red|r line\nwith a newline " .. string.rep("x", 300), 0) end
+    button("Back").scripts.OnClick(button("Back"))
+    emit("message", guideLines())
+
+    -- 7. a new session (/reload) has the guide again, shown as it was saved
+    Env.relog()
+    load()
+    login()
+    emit("after-reload", { Env.ns.Guide.part.IsOff(), shown(), Env.ns.Waypoint.Mine() ~= nil, #guideLines() })
+
 elseif scenario == "migration" then
     -- dbVersion 1 (0.4.x: realms at the top) becomes 2; the cache survives; a newer file is left alone.
     toawowcharDB = { Forever = { Thor = { v = 1, quests = { at = 1790000000, ids = { 3, 9 } } } }, ["Argent Dawn"] = { Thorin = { v = 1 } } }

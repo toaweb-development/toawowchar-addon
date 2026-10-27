@@ -61,7 +61,34 @@ toawowcharDB = {
     },
 }
 
+-- A guide that fails must not change the export. With an argument the guide hits an error
+-- before the bank, the flight map and /wowchar come by, and the text must still equal
+-- test/fixtures/export-full.txt; the chat lines are printed after it.
+--   guide-start-error  the route data raises on every read: the guide fails at its start
+--   guide-event-error  the guide starts on its real route, then fails in an event handler
+local mode = arg and arg[1]
+if mode == "guide-start-error" then
+    Env.ns.RouteData = setmetatable({}, { __index = function() error("route data broken on purpose") end })
+elseif mode == "guide-event-error" then
+    Env.ns.Guide.Settle = function() error("settle broken on purpose") end
+end
+local guideKey
+if mode then
+    Env.fire("PLAYER_ENTERING_WORLD", true, false)
+    guideKey = Env.ns.Guide.state.route and Env.ns.Guide.state.key or false
+    Env.slash("/wowchar guide")
+    Env.fire("QUEST_ACCEPTED", 42)
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.fire("ZONE_CHANGED_NEW_AREA")
+    Env.fire("PLAYER_REGEN_ENABLED")
+    Env.slash("/wowchar guide")
+end
+
 world.open = true
 Env.fire("BANKFRAME_OPENED")
 Env.fire("TAXIMAP_OPENED")
 print(Env.run())
+if mode then
+    print(Env.ns.Serialize(Env.chat))
+    print(Env.ns.Serialize({ guideKey, Env.ns.Guide.part.IsOff() }))
+end

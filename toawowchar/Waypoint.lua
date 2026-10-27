@@ -15,7 +15,14 @@
 -- waypoint and turns super-tracking on separately. None of these is protected or needs a
 -- hardware event. Every call is feature-detected and inside pcall: without them the guide
 -- still shows its steps, only without the marker.
+--
+-- The waypoint is a part of its own (Core.lua, Part): Set and Clear run through it. On the
+-- first error it says so in chat and is off until /reload (Set answers false, Clear does
+-- nothing); the guide goes on without the marker.
 local _, ns = ...
+
+local L = ns.L
+local part = ns.Part("waypoint", L["PART_WAYPOINT"])
 
 local Waypoint = {}
 ns.Waypoint = Waypoint
@@ -33,7 +40,7 @@ end
 
 -- Sets the waypoint at x, y (map percent, 0 to 100) on uiMapId and super-tracks it. Returns
 -- true when the game took it.
-function Waypoint.Set(uiMapId, x, y)
+local function Set(uiMapId, x, y)
     if not Available() or type(uiMapId) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then
         return false
     end
@@ -80,12 +87,27 @@ local function IsMine()
 end
 
 -- Clears the waypoint, but only when it is the one this addon set.
-function Waypoint.Clear()
+local function Clear()
     if IsMine() and C_Map and C_Map.ClearUserWaypoint then
         pcall(C_Map.ClearUserWaypoint)
     end
     mine = nil
 end
+
+-- Through the part; a result of nothing (off, or an error) counts as not set.
+function Waypoint.Set(uiMapId, x, y)
+    return part.Call(Set, uiMapId, x, y) == true
+end
+
+Waypoint.Clear = part.Wrap(Clear)
+
+-- Turned off by an error: the marker this addon set is cleared if it can still be.
+part.OnFail(function()
+    if IsMine() then
+        C_Map.ClearUserWaypoint()
+    end
+    mine = nil
+end)
 
 -- For the tests: the waypoint this addon thinks it set.
 function Waypoint.Mine()

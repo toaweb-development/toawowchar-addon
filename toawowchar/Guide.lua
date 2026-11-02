@@ -16,7 +16,7 @@
 -- A step is done:
 --   accept     every quest of it is in the quest log or completed (QUEST_ACCEPTED)
 --   objective  every quest of it is completed, ready to turn in, or has the objectives the step
---              is about finished (the step's note names them; without a match, all of them)
+--              is about finished (every note part must match; otherwise, all objectives)
 --              (QUEST_LOG_UPDATE, UNIT_QUEST_LOG_CHANGED)
 --   turn-in    every quest of it is completed (QUEST_TURNED_IN)
 --   travel     the player is on the step's map or a map inside it (ZONE_CHANGED_NEW_AREA,
@@ -207,7 +207,7 @@ local function ObjectivesDone(id, parts)
     if not ok or type(list) ~= "table" or #list == 0 then
         return false
     end
-    local matched, matchedDone, all = 0, 0, true
+    local matchedParts, matchedDone, all = {}, true, true
     for _, objective in ipairs(list) do
         if type(objective) == "table" then
             local finished = objective.finished == true
@@ -215,19 +215,24 @@ local function ObjectivesDone(id, parts)
                 all = false
             end
             local text = type(objective.text) == "string" and objective.text:lower() or ""
-            for _, part in ipairs(parts) do
+            for i, part in ipairs(parts) do
                 if text:find(part, 1, true) then
-                    matched = matched + 1
-                    if finished then
-                        matchedDone = matchedDone + 1
+                    matchedParts[i] = true
+                    if not finished then
+                        matchedDone = false
                     end
-                    break
                 end
             end
         end
     end
-    if matched > 0 then
-        return matchedDone == matched
+    -- Only trust the note when every nonempty part is recognized.
+    for i in ipairs(parts) do
+        if not matchedParts[i] then
+            return all
+        end
+    end
+    if #parts > 0 then
+        return matchedDone
     end
     return all
 end

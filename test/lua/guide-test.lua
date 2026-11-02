@@ -790,10 +790,26 @@ elseif scenario == "panel" then
     Env.fire("QUEST_TURNED_IN", 101)
     Env.fire("QUEST_TURNED_IN", 102)
     emit("travel", { panel(), running() == nil })
+    local function noStaleNavigation(label)
+        local checks = {}
+        local function check()
+            local w = Env.ns.GuideWindow.Widgets()
+            checks[#checks + 1] = running() == nil and not w.arrow.shown and w.distance:GetText() == ""
+        end
+        check()
+        Env.fire("ZONE_CHANGED"); check()
+        Env.combat = true; Env.fire("PLAYER_REGEN_DISABLED")
+        Env.combat = false; Env.fire("PLAYER_REGEN_ENABLED"); check()
+        toawowcharDB.settings.navigationEnabled = false; Env.ns.Navigation.Refresh()
+        toawowcharDB.settings.navigationEnabled = true; Env.ns.Navigation.Refresh(); check()
+        emit(label, checks)
+    end
+    noStaleNavigation("travel-no-stale-navigation")
     -- grind: the route's XP and a bar from the step's level (4) to the next step's (5)
     game.map, game.level, game.subzone, game.zone = 1436, 4, "", "Westfall"
     Env.fire("ZONE_CHANGED_NEW_AREA")
     emit("grind", panel())
+    noStaleNavigation("grind-no-stale-navigation")
     game.xp = 900
     Env.fire("PLAYER_XP_UPDATE", "player")
     emit("grind-xp", { panel().xp })
@@ -802,6 +818,9 @@ elseif scenario == "panel" then
     local before = #tickers
     Env.fire("PLAYER_LEVEL_UP", 5)
     emit("accept-again", { running() ~= nil, #tickers == before })
+    game.completed[201] = true
+    Env.fire("QUEST_TURNED_IN", 201)
+    noStaleNavigation("done-no-stale-navigation")
     Env.slash("/wowchar guide")
     emit("hidden", { running() == nil })
 

@@ -84,7 +84,10 @@ elseif scenario == "invalid" then
     state.player = nil; unavailable()
     state.player = { x = .5, y = .5 }
     for _, key in ipairs({ "map", "world", "facing", "inside", "kind" }) do
-        local old = state[key]; state[key] = secret; unavailable(); state[key] = old
+        local old = state[key]
+        state[key] = secret; unavailable()
+        state[key] = nil; unavailable()
+        state[key] = old
     end
     for _, bad in ipairs({ secret, secretTable, { x = secret, y = 0 }, { x = math.huge, y = 0 }, { x = 0/0, y = 0 } }) do
         state.worldVector = bad; unavailable()
@@ -143,6 +146,13 @@ elseif scenario == "waypoint" then
     ns.Waypoint.Clear(); assert(state.waypoint == foreign and not state.clears)
     nav.Stop(); nav.Refresh(); tick(); assert(state.waypoint == foreign and text.text == "100 yd")
     state.waypoint = nil; tick(); assert(state.sets == 1, "automatically reacquired")
+    assert(ns.Waypoint.Set(1,60,50))
+    local nearby = { uiMapID = 1, position = { x = .6001, y = .5 } }
+    state.waypoint = nearby
+    assert(ns.Waypoint.Mine() == nil, "nearby foreign marker claimed")
+    assert(not ns.Waypoint.Set(1,60,50) and state.waypoint == nearby)
+    ns.Waypoint.Clear(); assert(state.waypoint == nearby and not state.clears)
+    state.waypoint = nil
     assert(ns.Waypoint.Set(1,60,50)); state.waypoint = nil; assert(ns.Waypoint.Mine() == nil)
     state.waypoint = { uiMapID = 1, position = { x = .6, y = .5 } }; ns.Waypoint.Clear()
     assert(state.waypoint, "revoked claim reacquired identical tuple")

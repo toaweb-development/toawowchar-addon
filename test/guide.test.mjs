@@ -274,6 +274,9 @@ describe('the panel', () => {
     expect(p('nav-invalid')).toEqual(['131 yd'])
     expect(p('accept-again')).toEqual([true, true])
     expect(p('hidden')).toEqual([true])
+    for (const kind of ['travel', 'grind', 'done']) {
+      expect(p(`${kind}-no-stale-navigation`)).toEqual([true, true, true, true])
+    }
   })
 
   it('in combat: the layout stays, the coordinate line says it waits, the timer stops; it all catches up when combat ends', () => {

@@ -540,6 +540,7 @@ local function Draw()
     if measuring then
         StartTicker()
     else
+        ns.Navigation.SetTarget(nil) -- a non-navigation step must not resume the previous target
         StopTicker()
     end
 end

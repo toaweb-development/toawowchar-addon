@@ -11,8 +11,6 @@ ns.Waypoint = Waypoint
 -- one is ever cleared: a waypoint the player placed on the map is theirs.
 local mine
 
-local SAME = 0.0005
-
 local function Available()
     return C_Map and C_Map.SetUserWaypoint and C_Map.ClearUserWaypoint
         and UiMapPoint and UiMapPoint.CreateFromCoordinates and true or false
@@ -32,7 +30,7 @@ local function IsMine()
     if not nav.PlainTable(position) then mine = nil; return false end
     local map, x, y = point.uiMapID, position.x, position.y
     if not nav.Number(map, 1, 2147483647) or not nav.Number(x, 0, 1) or not nav.Number(y, 0, 1)
-        or map ~= mine[1] or math.abs(x - mine[2]) >= SAME or math.abs(y - mine[3]) >= SAME then
+        or map ~= mine[1] or x ~= mine[2] or y ~= mine[3] then
         mine = nil; return false
     end
     return true

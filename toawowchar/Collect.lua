@@ -69,7 +69,11 @@ local L = ns.L
 local DB = ns.DB
 local Int = ns.Int
 local IsSecret = ns.IsSecret
-local InCombat = ns.InCombat
+-- Combat status is a raw game value too; unavailable/secret status pauses closed.
+local function InCombat()
+    local ok, value = pcall(InCombatLockdown)
+    return not ok or ns.IsSecret(value) or type(value) ~= "boolean" or value
+end
 
 local Collect = {}
 ns.Collect = Collect
@@ -97,6 +101,7 @@ local offered = {}
 local sizes
 local pendingRead = false
 local missedInCombat = false
+local mapRestricted = false
 
 local function Observed()
     return DB().observed
@@ -163,6 +168,36 @@ local function Day()
     return now and math.floor(now / 86400) or nil
 end
 
+-- Reject secret containers AND tables whose contents may not be read. This API
+-- and restriction enums/event were verified for Forever at ca8368f (A-103).
+local function GameTable(value)
+    if IsSecret(value) or type(value) ~= "table" then
+        return false
+    end
+    if issecrettable then
+        local ok, secret = pcall(issecrettable, value)
+        if not ok or IsSecret(secret) or type(secret) ~= "boolean" or secret then
+            return false
+        end
+    end
+    return true
+end
+
+local function Restricted()
+    if mapRestricted then
+        return true
+    end
+    if not (C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive) then
+        return false
+    end
+    local kind = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Map
+    if not Number(kind, 0, 100) then
+        return true
+    end
+    local ok, active = pcall(C_RestrictedActions.IsAddOnRestrictionActive, kind)
+    return not ok or IsSecret(active) or type(active) ~= "boolean" or active
+end
+
 -- The client build of a record (the second return; pcall also covers a missing function).
 local function Build()
     local ok, _, build = pcall(GetBuildInfo)
@@ -178,9 +213,12 @@ end
 
 -- The player's { map, x, y } (per mille), or nil: inside an instance, or no position.
 local function Position()
+    if Restricted() then
+        return nil
+    end
     if IsInInstance then
         local ok, inside = pcall(IsInInstance)
-        if not ok or IsSecret(inside) or inside == true then
+        if not ok or IsSecret(inside) or type(inside) ~= "boolean" or inside then
             return nil
         end
     end
@@ -192,14 +230,14 @@ local function Position()
         return nil
     end
     local point = Ask(C_Map.GetPlayerMapPosition, map, "player")
-    if type(point) ~= "table" or type(point.GetXY) ~= "function" then
+    if not GameTable(point) or IsSecret(point.GetXY) or type(point.GetXY) ~= "function" then
         return nil
     end
     local ok, x, y = pcall(point.GetXY, point)
     if not ok or IsSecret(x) or IsSecret(y) or type(x) ~= "number" or type(y) ~= "number" then
         return nil
     end
-    if x < 0 or x > 1 or y < 0 or y > 1 or (x == 0 and y == 0) then
+    if x ~= x or y ~= y or x < 0 or x > 1 or y < 0 or y > 1 or (x == 0 and y == 0) then
         return nil
     end
     return { map, math.floor(x * 1000 + 0.5), math.floor(y * 1000 + 0.5) }
@@ -296,7 +334,7 @@ local function Level(q, id)
     if not level and C_QuestLog and C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetInfo then
         local index = Number(Ask(C_QuestLog.GetLogIndexForQuestID, id), 1, 500)
         local info = index and Ask(C_QuestLog.GetInfo, index)
-        level = type(info) == "table" and Number(info.level, 1, 255) or nil
+        level = GameTable(info) and Number(info.level, 1, 255) or nil
     end
     q.level = level or q.level
 end
@@ -304,17 +342,19 @@ end
 -- The quest log's objectives of a quest: a list of the game's objective tables, or {}.
 local function Objectives(id)
     local list = Ask(C_QuestLog and C_QuestLog.GetQuestObjectives, id)
-    return type(list) == "table" and list or {}
+    return GameTable(list) and list or {}
 end
 
 local function StoreObjectives(q, id)
-    local list = {}
+    local list = q.objectives or {}
     for i, o in ipairs(Objectives(id)) do
         if i > MAX_OBJECTIVES then
             break
         end
-        if type(o) == "table" then
-            list[i] = { GameText(o.text, MAX_TEXT) or "", Number(o.numRequired, 0, 1e9) or 0 }
+        if GameTable(o) then
+            local previous = list[i] or {}
+            list[i] = { GameText(o.text, MAX_TEXT) or previous[1] or "",
+                Number(o.numRequired, 0, 1e9) or previous[2] or 0 }
         end
     end
     if #list > 0 then
@@ -410,6 +450,7 @@ local function AddPoint(id, objective, position)
     if not q or not position then
         return
     end
+    Sizes() -- count the stored points BEFORE adding the first point of this session
     q.points = type(q.points) == "table" and q.points or {}
     local list = q.points[objective]
     if type(list) ~= "table" then
@@ -477,7 +518,10 @@ local function Baseline(id)
     counts = counts or {}
     local now = {}
     for i, o in ipairs(Objectives(id)) do
-        now[i] = type(o) == "table" and Number(o.numFulfilled, 0, 1e9) or 0
+        if i > MAX_OBJECTIVES then
+            break
+        end
+        now[i] = GameTable(o) and Number(o.numFulfilled, 0, 1e9) or nil
     end
     counts[id] = now
 end
@@ -522,15 +566,20 @@ local function ReadLog()
     counts = counts or {}
     local entries = Number(Ask(C_QuestLog.GetNumQuestLogEntries), 0, 500) or 0
     local position
+    local present = {}
     for index = 1, entries do
         local id = Number(Ask(C_QuestLog.GetQuestIDForLogIndex, index), 1, 2147483647)
         if id then
+            present[id] = true
             local last = counts[id]
             local now = {}
             for i, o in ipairs(Objectives(id)) do
-                local have = type(o) == "table" and Number(o.numFulfilled, 0, 1e9) or 0
+                if i > MAX_OBJECTIVES then
+                    break
+                end
+                local have = GameTable(o) and Number(o.numFulfilled, 0, 1e9) or nil
                 now[i] = have
-                if not first and last and i <= MAX_OBJECTIVES and have > (last[i] or 0) then
+                if not first and last and have and last[i] and have > last[i] then
                     position = position or Position() or false
                     AddPoint(id, i, position or nil)
                     local q = Quest(id)
@@ -541,6 +590,12 @@ local function ReadLog()
                 end
             end
             counts[id] = now
+        end
+    end
+    -- Abandonment has no turn-in event. Keep only the current log's bounded baseline.
+    for id in pairs(counts) do
+        if not present[id] then
+            counts[id] = nil
         end
     end
 end
@@ -570,7 +625,7 @@ end
 handlers.QUEST_LOG_UPDATE = LogChanged
 
 function handlers.UNIT_QUEST_LOG_CHANGED(unit)
-    if unit == "player" then
+    if not IsSecret(unit) and unit == "player" then
         LogChanged()
     end
 end
@@ -623,18 +678,21 @@ local function AroundPlayer(map)
             return true
         end
         local info = Ask(C_Map.GetMapInfo, here)
-        here = type(info) == "table" and Number(info.parentMapID, 1, 1e9) or nil
+        here = GameTable(info) and Number(info.parentMapID, 1, 1e9) or nil
     end
     return false
 end
 
 -- The world map's quest offers for the map it shows.
 local function ReadMap()
-    if not On() or not (WorldMapFrame and WorldMapFrame.GetMapID and C_QuestLine and C_QuestLine.GetAvailableQuestLines) then
+    if not On() or Restricted() or not (WorldMapFrame and WorldMapFrame.GetMapID and C_QuestLine and C_QuestLine.GetAvailableQuestLines) then
         return
     end
-    if WorldMapFrame.IsShown and not WorldMapFrame:IsShown() then
-        return
+    if WorldMapFrame.IsShown then
+        local shown = Ask(WorldMapFrame.IsShown, WorldMapFrame)
+        if IsSecret(shown) or type(shown) ~= "boolean" or not shown then
+            return
+        end
     end
     local map = Number(Ask(WorldMapFrame.GetMapID, WorldMapFrame), 1, 1e9)
     -- Only the map the player is on (or one around it): browsing other zones does not fill
@@ -643,11 +701,11 @@ local function ReadMap()
         return
     end
     local lines = Ask(C_QuestLine.GetAvailableQuestLines, map)
-    if type(lines) ~= "table" then
+    if not GameTable(lines) then
         return
     end
     for _, info in ipairs(lines) do
-        if type(info) == "table" then
+        if GameTable(info) then
             local q = Quest(info.questID)
             if q then
                 q.title = q.title or GameText(info.questName, MAX_NAME)
@@ -663,7 +721,7 @@ end
 Collect.ReadMap = ReadMap
 
 local function MapShown()
-    if not On() then
+    if not On() or Restricted() then
         return
     end
     local map = Number(Ask(WorldMapFrame.GetMapID, WorldMapFrame), 1, 1e9)
@@ -671,6 +729,16 @@ local function MapShown()
         pcall(C_QuestLine.RequestQuestLinesForMap, map)
     end
     ReadMap()
+end
+
+function handlers.ADDON_RESTRICTION_STATE_CHANGED(kind, state)
+    local mapKind = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Map
+    if not Number(mapKind, 0, 100) or not Number(kind, 0, 100) then
+        mapRestricted = true
+    elseif kind == mapKind then
+        -- Forever: Inactive=0, Activating=1, Active=2. Activating precedes query visibility.
+        mapRestricted = not Number(state, 0, 2) or state ~= 0
+    end
 end
 
 function handlers.QUESTLINE_UPDATE()

@@ -73,6 +73,13 @@ local mode = arg and arg[1]
 --                      rest is the same text, the guide starts
 --   observed-big       the section on and far too long: it alone is left out (too_large)
 local observedModes = { ["observed-off"] = true, observed = true, ["collect-error"] = true, ["observed-big"] = true }
+if mode == "observed-off-invalid" or mode == "observed-off-disabled" or mode == "observed-off-error" then
+    Env.ns.DB()
+    Env.ns.Collect.Section = function() error("off collector must not be read", 0) end
+    if mode == "observed-off-invalid" then toawowcharDB.observed.quests[501] = "invalid record" end
+    if mode == "observed-off-disabled" then toawowcharDB.settings.collect = false end
+    if mode == "observed-off-error" then Env.ns.Collect.part.Call(function() error("collector failed", 0) end) end
+end
 if observedModes[mode] then
     Env.ns.DB()
     local o = toawowcharDB.observed

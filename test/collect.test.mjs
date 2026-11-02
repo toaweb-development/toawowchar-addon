@@ -145,6 +145,12 @@ describe('the export: the «observed» section', () => {
     expect(run('observed-off').text).toBe(FIXTURE)
   })
 
+  for (const mode of ['observed-off-invalid', 'observed-off-disabled', 'observed-off-error']) {
+    it(`as shipped: ${mode} leaves every export byte unchanged`, () => {
+      expect(run(mode).text).toBe(FIXTURE)
+    })
+  }
+
   it('on: the same text with sections.observed added, and nothing else changed (bytes and values)', () => {
     const { text } = run('observed')
     const j = JSON.parse(text.slice(PREFIX.length))
@@ -212,6 +218,12 @@ describe('A-104 collector acceptance with the real module', () => {
   for (const mode of ['independent', 'independent-absent']) it(`${mode}: unknown ID with no route and failed guide`, () => {
     expect(get(mode, 'independent')).toEqual(['Uncharted Forever Quest', 79999, [2400, 432, 568], [[2400, 432, 568]], true, true])
   })
+  it('unknown test quest ID is absent from shipped guide data', () => {
+    expect(readFileSync(join(ROOT, 'toawowchar/Data/Routes.lua'), 'utf8')).not.toMatch(/\b2147483000\b/)
+  })
+  it('abandoned log quests leave no growing session counter cache', () => {
+    expect(get('cleanup', 'cleanup')).toEqual([10, true])
+  })
   it('both 3000-record caps preserve old data and allow existing records to update after reenable', () => {
     expect(get('record-caps', 'caps')).toEqual([3000, 3000, 0])
     expect(get('record-caps', 'preserved')).toEqual(['Preserved quest 1', 'Preserved NPC 1', 'Updated at cap', true, true, 3001])
@@ -227,6 +239,10 @@ describe('A-104 collector acceptance with the real module', () => {
     expect(get('storm', 'baseline')).toEqual([1])
     expect(get('storm', 'resumed')).toEqual([2, 0])
   })
+  for (const mode of ['nil', 'secret', 'raising', 'missing']) it(`combat status ${mode} pauses safely and resumes on regen`, () => {
+    expect(get(`combat-api-${mode}`, 'paused')).toEqual([0, true])
+    expect(get(`combat-api-${mode}`, 'resumed')).toEqual([1, true])
+  })
   const positions = ['position-table', 'position-scalar', 'nan', 'infinite', 'range', 'missing', 'raising', 'method-secret']
   for (const mode of [...positions, 'objective-list', 'objective-record', 'objective-count', 'objective-nil',
     'level-table', 'map-list', 'map-record', 'map-parent', 'map-shown', 'map-shown-secret', 'scalar-fields', 'bad-ids']) {
@@ -236,6 +252,7 @@ describe('A-104 collector acceptance with the real module', () => {
         expect(get(`unsafe-${mode}`, 'invalid-position')).toEqual([0])
         expect(get(`unsafe-${mode}`, 'recovered')).toEqual([true, [[2400, 800, 800]]])
       }
+      if (mode === 'objective-count') expect(get(`unsafe-${mode}`, 'objectives')).toEqual([['Unknown relic: 0/50', 50]])
       if (mode === 'bad-ids') expect(get(`unsafe-${mode}`, 'ids')).toEqual([1, 1, 1])
     })
   }

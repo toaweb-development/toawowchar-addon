@@ -452,6 +452,20 @@ local function hiddenTable()
     secretTables[t] = true
     return t
 end
+    -- Controlled primitive Lua literal, test-only. No game/import input is executed.
+    local function literal(v)
+        if type(v) == "table" then
+            local keys, entries = {}, {}
+            for k in pairs(v) do keys[#keys + 1] = k end
+            table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+            for _, k in ipairs(keys) do entries[#entries + 1] = "[" .. literal(k) .. "]=" .. literal(v[k]) end
+            return "{" .. table.concat(entries, ",") .. "}"
+        end
+        if type(v) == "string" then return string.format("%q", v) end
+        assert(type(v) == "number" or type(v) == "boolean")
+        return tostring(v)
+    end
+
 local UNKNOWN = 2147483000 -- not present in the shipped guide; still within format-3 ID bounds
 local function seedUnknown()
     offer(UNKNOWN, "Uncharted Forever Quest", 79999, "Uncharted Giver")
@@ -614,9 +628,6 @@ elseif scenario:find("^unsafe%-") then
     if mode:find("^map%-") then
         if mode == "map-parent" then openMap(2401) else openMap(2400) end
     end
-    Env.fire("QUEST_TURNED_IN", UNKNOWN, SECRET, math.huge)
-    local q = O().quests[UNKNOWN]
-    emit("safe", { healthy(), q.title, q.giver, q.start, q.level, q.xp == nil, q.money == nil })
     if mode == "nan" or mode == "infinite" or mode == "range" or mode == "missing" or mode == "raising"
         or mode == "position-table" or mode == "position-scalar" or mode == "method-secret" then
         emit("invalid-position", { #points(UNKNOWN, 1) })
@@ -625,6 +636,10 @@ elseif scenario:find("^unsafe%-") then
         emit("recovered", { healthy(), points(UNKNOWN, 1) })
     end
     if mode == "bad-ids" then emit("ids", { Env.ns.Collect.Counts() }) end
+    if mode == "objective-count" then emit("objectives", O().quests[UNKNOWN].objectives) end
+    Env.fire("QUEST_TURNED_IN", UNKNOWN, SECRET, math.huge)
+    local q = O().quests[UNKNOWN]
+    emit("safe", { healthy(), q.title, q.giver, q.start, q.level, q.xp == nil, q.money == nil })
 
 elseif scenario == "restrictions" then
     load()
@@ -655,24 +670,11 @@ elseif scenario == "persist-produce" then
     load()
     seedUnknown()
     count(UNKNOWN, 1, 1)
-    -- Controlled primitive Lua literal, test-only. No game/import input is executed.
-    local function literal(v)
-        if type(v) == "table" then
-            local keys, entries = {}, {}
-            for k in pairs(v) do keys[#keys + 1] = k end
-            table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-            for _, k in ipairs(keys) do entries[#entries + 1] = "[" .. literal(k) .. "]=" .. literal(v[k]) end
-            return "{" .. table.concat(entries, ",") .. "}"
-        end
-        if type(v) == "string" then return string.format("%q", v) end
-        assert(type(v) == "number" or type(v) == "boolean")
-        return tostring(v)
-    end
     toawowcharDB.realms.Preserved = { Character = { marker = "cache survives" } }
     toawowcharDB.guide.saved = { step = 7 }
     toawowcharDB.settings.guideAtLogin = false
     emit("literal", "return " .. literal(toawowcharDB))
-    emit("observed", O())
+    emit("observed", literal(O()))
 
 elseif scenario == "persist-consume" then
     -- Fresh Lua process; only the Node test's generated temporary literal is loaded.
@@ -680,7 +682,7 @@ elseif scenario == "persist-consume" then
     local before = Env.ns -- no addon namespace from the producer process
     load()
     assert(before == Env.ns)
-    emit("observed", O())
+    emit("observed", literal(O()))
     emit("preserved", { toawowcharDB.dbVersion, toawowcharDB.realms.Preserved.Character.marker,
         toawowcharDB.guide.saved.step, toawowcharDB.settings.guideAtLogin })
     emit("counts", { Env.ns.Collect.Counts() })
@@ -689,4 +691,43 @@ elseif scenario == "persist-consume" then
     at(0.8, 0.8)
     count(UNKNOWN, 1, 2)
     emit("continued", { Env.ns.Collect.Counts() })
+end
+
+
+if scenario == "cleanup" then
+    load()
+    for batch = 1, 3 do
+        game.order, game.log = {}, {}
+        for i = 1, 10 do accept(batch * 100 + i, "Temporary quest", { { "Relics: 0/5", 0, 5 } }) end
+        Env.fire("QUEST_LOG_UPDATE")
+    end
+    -- Test-only memory probe: no shipped debug hook or new public collector API.
+    local kept
+    for i = 1, 30 do
+        local name, value = debug.getupvalue(Env.ns.Collect.ReadLog, i)
+        if name == "counts" then
+            kept = 0
+            for _ in pairs(value) do kept = kept + 1 end
+            break
+        end
+    end
+    emit("cleanup", { kept, healthy() })
+elseif scenario:find("^combat%-api%-") then
+    load()
+    seedUnknown()
+    local original = InCombatLockdown
+    local mode = scenario:sub(12)
+    if mode == "missing" then InCombatLockdown = nil
+    elseif mode == "nil" then InCombatLockdown = function() return nil end
+    elseif mode == "secret" then InCombatLockdown = function() return SECRET end
+    elseif mode == "raising" then InCombatLockdown = function() error("combat unavailable") end
+    else error("unknown combat probe " .. mode) end
+    -- ReadLog is the actual timer/event reader, through its actual isolation boundary.
+    -- Other modules' independent legacy combat readers are outside this probe's scope.
+    game.log[UNKNOWN].objectives[1][2] = 1
+    Env.ns.Collect.part.Call(Env.ns.Collect.ReadLog)
+    emit("paused", { #points(UNKNOWN, 1), healthy() })
+    InCombatLockdown = original
+    Env.fire("PLAYER_REGEN_ENABLED")
+    emit("resumed", { #points(UNKNOWN, 1), healthy() })
 end

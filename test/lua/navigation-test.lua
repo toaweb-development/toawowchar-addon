@@ -157,6 +157,12 @@ elseif scenario == "settings" then
     assert(db.guide.shown and db.dbVersion == 3)
     db.settings = secretTable; assert(ns.DB().settings.navigationScale == 1)
     db.settings = { navigationEnabled = true, navigationScale = 1 }
+    Settings = {
+        RegisterCanvasLayoutCategory = function(frame, name)
+            return { frame = frame, name = name, GetID = function() return 77 end }
+        end,
+        RegisterAddOnCategory = function() end,
+    }
     Env.fire("PLAYER_LOGIN")
     local _, controls = ns.SettingsPanel.Frame()
     controls.navigation:SetChecked(false); controls.navigation.scripts.OnClick(controls.navigation)

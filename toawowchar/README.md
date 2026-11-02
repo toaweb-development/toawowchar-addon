@@ -88,6 +88,8 @@ Options > AddOns > toawowchar, or `/wowchar settings`:
 
 - **Collect quest data** (on by default).
 - **Show the guide at login** (off by default).
+- **Enable guide navigation** (on by default).
+- **Smaller guide** / **Larger guide** (75%–150%, default 100%).
 - A line with how many quests, NPCs and places are stored.
 
 ## What is in the text

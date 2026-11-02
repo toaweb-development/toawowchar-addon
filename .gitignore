@@ -1,3 +1,6 @@
 dist/
 node_modules/
 __pycache__/
+
+# Personal Claude notes
+CLAUDE.local.md

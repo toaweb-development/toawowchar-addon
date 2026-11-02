@@ -1,92 +1,65 @@
-# toawowchar-addon: agent guide
+# toawowchar-addon
 
-The **toawowchar** addon for World of Warcraft: Forever, its tests and the scripts that build its download. Public repository `toaweb/toawowchar-addon`. The web app that reads what the addon makes is a separate repository, `toaweb/toawowchar` («wowchar»).
+Lua 5.1-addon for World of Warcraft: Forever med karaktereksport, guide og collector.
+Prosjektinstruksene følger toaweb-rules v0.14.0 med
+[dokumenterte overgangsavvik](docs/decisions/001-launch-before-stack-migration.md).
 
-Developer commands and the release steps are in [README.md](README.md); this file holds the rules. Standards come from the toa-rules MCP (`git`, `versioning`, `dependencies`, `security`, `deployment-strategy`).
+## Slik finner du reglene
 
-**Every change to the addon follows [docs/wow-addon-rules.md](docs/wow-addon-rules.md)**, the owner's rules for WoW addons. Where this repository does something else on purpose, it is listed under «Deviations» below; anything not listed there follows the rules document.
+- Bruk toaweb-mcp: route med oppgaven, så get av nødvendige wow-addon-seksjoner.
+- Bruk relevante toaweb-skills; instruksjonsvedlikehold: toaweb-maintaining-agents-md.
+- Uten MCP: les nødvendige seksjoner i lokal toaweb-rules/standards og rapporter avviket.
+- Les [prosjektbeslutninger](docs/project-decisions.md) og [eierens addonregler](docs/wow-addon-rules.md).
+  Gammel agentguide er bevart via beslutningsoversikten; harde eierregler gjelder fortsatt.
+- [README](README.md) har utviklerkommandoer; [status](docs/status/p-002.md) har oppgaver/gates.
 
-## Deviations
+## Kommandoer
 
-From `docs/wow-addon-rules.md`, decided by the owner:
+Fra repo-roten; TOAWEB_RULES peker på gjeldende rules-checkout:
 
-- **The export is plain JSON behind `WOWCHAR:3:`, with no LibSerialize or LibDeflate.** wowchar decodes the text on its server (`app/server/utils/addon-export.ts`), so the addon writes a format that wowchar owns and can read without a Lua library (see «What lives where»).
-- **Releases use our own deterministic zip pipeline (`scripts/build-zip.py`, `release.yml`), not BigWigs Packager.** wowchar pins the release zip by size and sha256, so the bytes must be reproducible on any machine and in any time zone (see «Release»).
-
-## What lives where
-
-| Here (toawowchar-addon) | In wowchar (toawowchar) |
+| Formål | Kommando |
 |---|---|
-| The addon: the Lua files under `toawowchar/` (the TOC lists them), `toawowchar.toc` and the players' `README.md` | The web app, its database, its Docker image and deploy |
-| The Lua tests and the stub of the game's API (`test/lua/`) | The import of the text (the real decoder) and its tests |
-| The release scripts, CI and the release workflow | The pin of an addon release (`app/shared/addon-release.ts`): version, asset address, size, sha256, TOC interface numbers |
-| The example exports of a release | The same examples, committed as fixtures that must import without error |
-| `test/contract.json`, a **copy** of the limits | **The format itself** |
+| Instruksjonsgate | `toaweb-mcp check-agents --rules "$TOAWEB_RULES" .` |
+| Versjonssamsvar | `python3 scripts/check-version.py` |
+| Én test, eksisterende lokalt image | `docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp --volume "$PWD":/w toawowchar-addon-test node --test --test-reporter=spec test/release.test.mjs` |
 
-**The leveling routes are owned by wowchar too.** It generates them (its «Generate routes» admin action) and serves them at `/api/routes`; `scripts/fetch-routes.py` turns the answer into `toawowchar/Data/Routes.lua`, which is generated, committed and never edited by hand. A change to the route answer's shape is made in wowchar first, then in the script and its tests here.
+Testkommandoen krever allerede bygget image fra test/Dockerfile, ikke en vilkårlig ny pull.
+[Test-/fullcheckoversikten](docs/verification.md) beskriver scripts/test.sh og lokale bygg.
+make verify finnes ikke; dagens tester er ikke et bevis for klient, reload eller CPU/minne.
 
-**The export formats are owned by wowchar.** The truth is in its `app/shared/addon-export-format.ts` (prefixes, formats, length limit), `app/shared/addon-sections.ts` (section names, missing reasons, cached sections) and the decoder in `app/server/utils/addon-export.ts` (`ADDON_BOUNDS`, `ADDON_LIST_CAPS`). `test/contract.json` is a copy taken at wowchar commit `dfba6fc`; when wowchar changes one of those values, the copy is changed in the matching pull request here. Never change the copy alone to make a test pass.
+## Ufravikelige regler
 
-**A format change goes as two pull requests, one per repository, and the web-app session is told first** (the owner or the lead tells it; do not start the addon side alone). wowchar still reads older formats, so its pull request is merged and deployed first, then this repository's, then a release, then wowchar moves its pin.
+- Web eier format 3 og ruter. test/contract.json er en kopi; aldri endre bare kopien for å få grønt.
+  Webaksept utvides før addonet sender ny form; eldre formater beholdes på web.
+- Eksporten er plain JSON bak WOWCHAR:3:, egen serializer, uten LibSerialize/LibDeflate.
+  Ingen | i kopiboksen. Verdier utenfor grensene utelates, ikke klippes. Ferdige quests bare vokser.
+- Observed-teksteeksport forblir av etter eierbeslutning. dbVersion 3-observasjoner
+  importeres separat fra SavedVariables; ikke reset gamle data for å migrere.
+- Collectors caps og kildebetydning bevares, se prosjektbeslutningene. Ingen registrering i kamp;
+  observasjoner er fakta med kildebegrensninger, ikke en dagbok eller automatisk rutefasit.
+- Snapshot strupes til 5 sekunder; quest turn-in oppdaterer også gull/XP;
+  level leses 1 sekund etter PLAYER_LEVEL_UP. Dette er tilsiktet eierbestemt oppførsel.
+- Nye sidefunksjoner isoleres med ns.Part/part.Call/part.Wrap; feil slår av bare delen.
+  Eksport/cache må fungere uavhengig; Fail/OnFail må ikke kaste. Filkropper holdes til definisjoner.
+- Lua 5.1, beskyttede spillkall og null luacheck-advarsler; nye leste API-globaler i .luacheckrc.
+  Ikke omgå hemmelige verdier eller kamprestriksjoner. Ikke svekk tester; les tilsiktet fixturediff.
+- Data/Routes.lua er webgenerert og redigeres ikke for hånd.
+- Deterministisk zip med scripts/build-zip.py beholdes. ZIP_FILES og TOC endres samlet.
+  Publiserte assets/tagger erstattes aldri; full pakke-/workflowregel er lenket i beslutningene.
+- Addonnavn, SavedVariables og slashalias beholdes; ingen overtakelse fra WowcharExportDB.
+- Spiller-README skal stemme med koden; 0.5.0 er ikke verifisert i faktisk klient.
+- Endrer du kommandoer, verktøy eller regler, oppdater AGENTS.md i samme commit.
 
-## Release
+## Spør eieren før du
 
-Steps are in README.md, «Cut a release». The rules behind them:
+- endrer materiell betydning av harde eierregler eller disse to regelseksjonene,
+- endrer kontrakter uten koordinering med web, eller legger til en avhengighet uten begrunnelse,
+- gjør publisering eller endrer release-/deploymekanismer.
 
-- The version is in five places that must agree: `## Version:` in the TOC, `ADDON_VERSION` in `toawowchar/Core.lua`, the first line of `Core.lua` (`-- toawowchar X.Y.Z`), the `Version X.Y.Z` line in `toawowchar/README.md` (the first line that starts that way; keep it under «Status») and the newest `## [X.Y.Z] - date` in `CHANGELOG.md`. `scripts/check-version.py` checks them; `## Interface:` must be a comma-separated list of whole numbers (10000 to 999999), no repeats.
-- **The pull-request version gate.** A change to any file in the zip (`toawowchar/*`) or to the scripts that decide its bytes (`scripts/build-zip.py`, `scripts/addon_info.py`) needs a new version, higher than the base branch's in all five places, and a CHANGELOG entry with text, even for a comment or a typo. `ci.yml` enforces it on every pull request with `scripts/check-bump.py origin/<base>` (the base comes through `env:`; the checkout has `fetch-depth: 0`). Docs, tests and workflows may change without a bump. A version never goes down. Do not weaken or skip the step to get a pull request through. SemVer; pre-1.0, so a MINOR may break.
-- **The owner tags and pushes.** Agents do not commit, tag, push or run workflows without being told to. `vX.Y.Z` is annotated and is put on a commit on `main`; `release.yml` publishes the release. Tags are never moved or deleted.
-- **Tag ruleset.** Before the first tag the owner sets up a tag ruleset on this repository (pattern `v*`, restrict updates and deletions). Tags are never moved or deleted; a bad release gets a new version.
-- The release asset address is `https://github.com/toaweb/toawowchar-addon/releases/download/vX.Y.Z/toawowchar-X.Y.Z.zip`. wowchar pins that address with the size and sha256 of the file, so a release is never replaced after it is published: a fix is a new version. The size and sha256 to pin are in the release's `SHA256SUMS` and in the output of `python3 scripts/build-zip.py` (the build is deterministic: the local zip equals the release's).
-- After a release, wowchar's pin is bumped: its `AGENTS.md`, «Addon release», has its side of the procedure.
-- The zip holds exactly the files of `ZIP_FILES` in `scripts/addon_info.py` under `toawowchar/`, in that order: the players' README, the TOC and every Lua file the TOC loads. A new file in the zip means a change to `ZIP_FILES` and to the TOC in the same commit; `check-version.py` refuses a TOC that loads a file the zip lacks, or misses a Lua file the zip has. TOC lines use `\` between folders (Blizzard's own style; `addon_info.py` reads it as `/`). A new file also changes the pinned zip of the synthetic tree in `test/release.test.mjs` (`SYNTHETIC_SIZE`, `SYNTHETIC_SHA256`): pin the new numbers only after reading the diff of `build-zip.py`. Source files are LF only (`.gitattributes`); `build-zip.py` refuses a carriage return.
+## Git
 
-## CI and workflows
-
-- **No self-hosted runners.** This repository is public, and `deployment-strategy` forbids self-hosted runners for public repositories. Every job is `runs-on: ubuntu-latest`. Do not add `runs-on` variables that could point elsewhere.
-- Actions are pinned to a full commit SHA with the version as a comment: `actions/checkout`, `actions/upload-artifact` and `actions/download-artifact` today (resolve a SHA with `gh api repos/actions/<name>/git/ref/tags/<tag>`, and peel an annotated tag; never write one from memory). Each workflow has `permissions: contents: read` at the top; only the `publish` job in `release.yml` has `contents: write`. `persist-credentials: false` on checkout, because the tests run repository code. Values from the event go through `env:`, never `${{ }}` inside a `run:` script.
-- **Build and publish are separate jobs, and the job that holds the write token runs no repository code.** `release.yml`'s `build` job (`contents: read`) runs the repository's code and uploads `release/` and `release-notes.md` as a workflow artifact (retention one day). The `publish` job (`needs: build`, `contents: write`) has no checkout: it downloads the artifact, runs `sha256sum --check SHA256SUMS` (and refuses files SHA256SUMS does not list) and then `gh release create --verify-tag --repo "$GITHUB_REPOSITORY"`. Never add a checkout, a script from this repository or a third-party action that builds or runs code to `publish`; new build steps go in `build`.
-- `ci.yml` (push to `main`, pull requests): `scripts/test.sh` (luacheck with `.luacheckrc`, zero warnings, then the tests), `scripts/check-version.py`, on a pull request `scripts/check-bump.py` against the base branch, and the zip built twice in different time zones with the sha256 compared.
-- `release.yml` (tag `v*.*.*`): job `build`: the tag must be on `main`; `check-version.py <tag>`; tests; zip; `SHA256SUMS` over the zip and the examples; the CHANGELOG section of the version as notes; upload as an artifact. Job `publish`: verify the artifact, then create the release with the preinstalled `gh` (`gh release create --verify-tag`, which fails on an existing release; no third-party action holds the write token).
-- `.github/dependabot.yml`: weekly version updates for `github-actions` and for the base image of `test/Dockerfile`. The image is pinned by digest (`FROM node:24-alpine@sha256:…`); Dependabot moves the digest.
-- No secrets exist or are needed. This repository does not deploy anything; wowchar's pipeline downloads the release.
-- Workflows are checked with `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.12` (includes shellcheck).
-
-## Decisions of the owner (run 024)
-
-These are intended behaviour, not bugs; change them only when the owner says so.
-
-- **The snapshot is throttled to one rebuild of a part every 5 seconds** (`SNAPSHOT_INTERVAL`). The first event rebuilds at once; the events inside the interval share one rebuild at its end. Nothing is read in combat; the parts that changed are rebuilt once when combat ends. The snapshot never writes to the chat.
-- **A quest turned in also refreshes gold and XP** (`QUEST_TURNED_IN` asks for the `player` part as well as the completed quests), because the reward changes them.
-- **The level is read 1 second after `PLAYER_LEVEL_UP`** (`LEVEL_UP_DELAY`): some clients still answer the old level and XP maximum while the event fires.
-- The addon is called toawowchar (folder, TOC, SavedVariables `toawowcharDB`); `/wowchar` and `/toawowchar` are the same command. Nothing is taken over from the old `WowcharExportDB`.
-
-## Verified in a real client
-
-On 2026-10-22, in a real Forever client (build 70450, addon 0.4.0):
-
-- SavedVariables are read back after `/reload`.
-- The completed quests come back in full right after login.
-- `GetProfessions` gives the skill without the profession window open (Mining is skill line 186).
-- Every quest id checked exists in Questie.
-- Seen in a real export: a character with no spec chosen yet gets the class as its spec (spec id 1485, name «Hunter»). The addon sends what the game says; the web app handles it.
-
-**Not tested in a real client:** the bank and warband bank capture, and the recipes read from the profession window (not reachable yet). The flight map was not part of the check. The leveling guide (0.5.0) has not been in a real client at all: not its window, its events, the waypoint and the navigation marker, nor the race tokens of the two Skyborne races. Say so when writing about them; do not call them verified.
-
-## Rules for work here
-
-- **Commits in this repository use the owner's GitHub noreply address `241168682+toaweb@users.noreply.github.com`**, not a personal address (the history is public). It is set per repository: `git config user.email 241168682+toaweb@users.noreply.github.com` in each clone. The history before this rule carries two personal addresses and `Claude-Session:` URLs in commit messages; that was seen, is accepted, and is not rewritten (the owner may decide otherwise).
-- Conventional Commits, English, lowercase (`git` standard). Branch from `main`; short branches (`feat/…`, `fix/…`, `chore/…`).
-- The completed quests only ever grow (the union of the game's list and the cache); an empty answer never empties anything. A value outside wowchar's limits is left out, never cut, because wowchar refuses the whole text for one bad value.
-- **luacheck** (`.luacheckrc`, `std = "lua51"`): the only globals the addon writes are `toawowcharDB`, `SLASH_WOWCHAR1`, `SLASH_WOWCHAR2` and `SlashCmdList`; every game global it reads is listed in `read_globals`, and a new game call adds its name there in the same change. Zero warnings; do not silence a warning with an `ignore` unless it is a cosmetic leftover with a reason next to it.
-- The Lua is the WoW client's Lua 5.1. Every game call is guarded (`pcall` or an existence check): a missing function makes one section `missing`, never an error. The text is written by the addon's own serializer; no `|` may reach the copy box.
-- **Parts fail on their own** (`Core.lua`, `ns.Part`). The guide, the waypoint, the quest data collection (`Collect.lua`) and the settings panel (`UI/Settings.lua`) are parts, and so is every new feature next to the export: its start, its event scripts, its slash word and its click and drag scripts run only through `part.Call` / `part.Wrap`. The first error says one chat line («the guide hit an error and is turned off for this session: …») and turns that part off until `/reload` (`part.OnFail` unregisters, hides and clears). The export and the cache are not a part and never call into one; `test/guide.test.mjs` breaks the guide and checks that `/wowchar` still gives `test/fixtures/export-full.txt` byte for byte. Nothing in `Fail` or an `OnFail` hook may raise (each game call in its own `pcall`). Not covered: an error in a file's body while it loads (`Guide.lua`, `Waypoint.lua`, `UI/GuideWindow.lua`, `Data/Routes.lua`); the client then stops only that file and shows its own error, and the export is safe because the TOC loads those files after it. Keep file bodies to definitions.
-- **The export's `observed` section is off** (`ns.EXPORT_OBSERVED = false` in `Core.lua`, Tor's decision 2026-10-27): wowchar's format 3 decoder refuses an unknown section, so it goes on only in the round where wowchar accepts and stores it. Its shape is written in wowchar's `docs/addon-export-format-3.md` («Planned: `observed`», branch `docs/observed-section` there). Off, the export is the pinned fixture byte for byte (`test/collect.test.mjs`).
-- **The collected quest data is facts, not a diary**: no time per point and no trail; each quest and NPC record has `first`/`last` (days) and `build`. Nothing is recorded in combat. Caps in `Collect.lua` (20 points per objective, spread; 4,000 points, 3,000 quests, 3,000 NPCs).
-- Do not weaken a test to make it pass. `UPDATE_FIXTURES=1` is for a deliberate change to what the addon exports, and the diff of `test/fixtures/` is then read.
-- The players' README is player-facing and must be true to the code. Check a claim against the Lua under `toawowchar/` before you write it; say «not tested in a real client» where that is the case.
-- Dependencies: none (Node's built-in test runner, Python's standard library, no `package.json`). A new dependency needs a reason (`dependencies` standard).
-
-## License
-
-MIT, copyright toaweb (`LICENSE`).
+- Egen lokal feat/, fix/ eller chore/-gren; Conventional Commits på engelsk, små bokstaver.
+- Commits bruker eierens GitHub noreply-adresse; eksisterende akseptert historikk omskrives ikke.
+- Ingen push, PR, tag, release, workflowstart, deploy eller produksjonstilgang uten uttrykkelig oppdrag.
+- Dokumentarbeid krever ingen versjonsbump. Bevar dagens femfelts versjons-/pakkegrenser.
+- Landing krever godkjent scope og grønne relevante gates; se status før landing av uverifisert arbeid.

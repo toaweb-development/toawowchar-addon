@@ -1,5 +1,15 @@
 # toawowchar-addon
 
+## Prosjektinstrukser og overgang
+
+Gjeldende [AGENTS.md](AGENTS.md), [beslutningsregister](docs/project-decisions.md),
+[overgangs-ADR](docs/decisions/001-launch-before-stack-migration.md) og
+[verifikasjonsoversikt](docs/verification.md) er inngangen til utviklerarbeid.
+PR-/push-/tag-/release-/deployoppskrifter nedenfor beskriver legacy-mekanikk;
+de er inaktive som arbeidsordre i P-002. Workflows er teknisk uendret.
+Ingen slik operasjon er autorisert. Nuxt beholdes til launch før separat migreringsfase.
+
+
 The **toawowchar** addon for World of Warcraft: Forever. It makes a text string of what a character has and has done, which the player pastes at [wowchar](https://wowchar.toaweb.com) (a character tracker; its source is the separate repository `toaweb/toawowchar`).
 
 This repository holds the addon, its tests and the scripts that build the download. Players: the addon's own [README](toawowchar/README.md) (it is inside the zip) explains install and use, and the [releases](https://github.com/toaweb/toawowchar-addon/releases) hold the downloads.

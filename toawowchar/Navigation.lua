@@ -14,6 +14,7 @@ local elapsedTotal = 0
 local running = false
 local lastText
 local inputVector
+local mapRestricted = false
 
 local function Number(v, low, high)
     return not ns.IsSecret(v) and type(v) == "number" and v == v and v >= low and v <= high
@@ -56,9 +57,9 @@ local function Invalidate()
 end
 
 local function Stop(message)
+    if sampler and running then sampler:SetScript("OnUpdate", nil); sampler:Hide() end
     running = false
     elapsedTotal = 0
-    if sampler then sampler:SetScript("OnUpdate", nil); sampler:Hide() end
     Invalidate()
     Clear(message or "")
 end
@@ -92,8 +93,19 @@ local function World(map, vector)
     return world, position.x, position.y
 end
 
+-- Optional restriction API: event Activating precedes the query becoming true.
+local function Restricted()
+    if mapRestricted then return true end
+    if not (C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive) then return false end
+    local kind = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Map
+    if not Number(kind, 0, 100) then return true end
+    local ok, active = pcall(C_RestrictedActions.IsAddOnRestrictionActive, kind)
+    return not ok or ns.IsSecret(active) or type(active) ~= "boolean" or active
+end
+
 local function Sample()
     if Combat() then Stop(""); return end
+    if Restricted() then Stop(L["NAV_UNAVAILABLE"]); return end
     if not (C_Map and C_Map.GetBestMapForUnit and C_Map.GetPlayerMapPosition and C_Map.GetWorldPosFromMapPos
         and GetPlayerFacing and IsInInstance and CreateVector2D) then
         Invalidate(); Clear(L["NAV_UNAVAILABLE"]); return
@@ -143,7 +155,10 @@ end
 local function Refresh()
     if not host then return end
     local settings = ns.DB().settings
-    if settings.navigationEnabled ~= true or not host:IsShown() or not targetMap or Combat() then Stop(""); return end
+    local okShown, shown = pcall(host.IsShown, host)
+    if settings.navigationEnabled ~= true or not okShown or ns.IsSecret(shown) or type(shown) ~= "boolean"
+        or not shown or not targetMap or Combat() then Stop(""); return end
+    if Restricted() then Stop(L["NAV_UNAVAILABLE"]); return end
     if not running then
         running = true
         elapsedTotal = 0
@@ -178,8 +193,18 @@ Navigation.Attach = part.Wrap(function(frame, texture, distance)
     sampler = CreateFrame("Frame", nil, host)
     sampler:Hide()
     host:HookScript("OnHide", part.Wrap(function() Stop("") end))
-    sampler:SetScript("OnEvent", part.Wrap(function(_, event)
+    sampler:SetScript("OnEvent", part.Wrap(function(_, event, restrictionType, state)
         Invalidate()
+        if event == "ADDON_RESTRICTION_STATE_CHANGED" then
+            local kind = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Map
+            if not Number(kind, 0, 100) or not Number(restrictionType, 0, 100) then
+                mapRestricted = true
+            elseif restrictionType == kind then
+                -- Pinned enum: Inactive=0, Activating=1, Active=2. Unknown is closed.
+                mapRestricted = not Number(state, 0, 2) or state ~= 0
+            end
+            if mapRestricted then Stop(L["NAV_UNAVAILABLE"]); return end
+        end
         if event == "PLAYER_REGEN_DISABLED" then Stop("")
         else Navigation.ApplyScale(); Refresh() end
     end))

@@ -410,9 +410,9 @@ elseif scenario == "buttons" then
     local f = Env.ns.GuideWindow.Frame()
     local buttons = {}
     for _, child in ipairs(Env.frames) do
-        if child.parent == f and child.kind == "Button" then buttons[child.label] = child end
+        if child.parent == f and child.kind == "Button" then buttons[child.label or child.text] = child end
     end
-    emit("labels", { buttons.Back ~= nil, buttons.Skip ~= nil, buttons.Hide ~= nil })
+    emit("labels", { buttons.Back ~= nil, buttons.Skip ~= nil, buttons.Hide ~= nil, buttons["Map pin"] ~= nil })
     buttons.Skip.scripts.OnClick(buttons.Skip)
     emit("skip", { index(), savedGuide().skipped })
     buttons.Back.scripts.OnClick(buttons.Back)
@@ -813,6 +813,9 @@ elseif scenario == "panel-combat" then
     local before = panel()
     local w = Env.ns.GuideWindow.Widgets()
     local names = { [w.coords] = "coords", [w.distance] = "distance" }
+    for _, f in ipairs(Env.frames) do
+        if f.parent == Env.ns.GuideWindow.Frame() and f.kind == "Frame" then names[f] = "sampler" end
+    end
     local writes = {}
     Env.spy = function(region, method) writes[#writes + 1] = (names[region] or "other") .. ":" .. method end
     Env.combat = true

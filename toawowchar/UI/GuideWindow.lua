@@ -344,11 +344,11 @@ local function Create()
     widgets.distance:SetPoint("LEFT", widgets.coords, "RIGHT", 8, 0)
     widgets.arrow = f:CreateTexture(nil, "OVERLAY")
     widgets.arrow:SetSize(24, 24)
-    widgets.arrow:SetPoint("TOPRIGHT", -PAD, -LINE.header - LINE.rule - 6)
+    widgets.arrow:SetPoint("TOPLEFT", PAD + 5, -LINE.header - LINE.rule - ICON - 12)
     ns.Navigation.Attach(f, widgets.arrow, widgets.distance)
     widgets.map = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     widgets.map:SetSize(74, 20)
-    widgets.map:SetPoint("BOTTOMRIGHT", -PAD, PAD + 8)
+    widgets.map:SetPoint("BOTTOMRIGHT", -PAD, PAD)
     widgets.map:SetText(L["NAV_MAP"])
     widgets.map:SetScript("OnClick", part.Wrap(function()
         local step = Guide.Current()
@@ -535,7 +535,7 @@ local function Draw()
     else
         widgets.progress:Hide()
     end
-    frame:SetHeight(-y + PAD)
+    frame:SetHeight(-y + PAD + 28)
 
     if measuring then
         StartTicker()
@@ -624,7 +624,6 @@ function GuideWindow.CombatStarted()
     StopTicker()
     if frame and frame:IsShown() and widgets.coords then
         widgets.coords:SetText(Colored(COLOR.hint, L["IN_COMBAT"]))
-        widgets.distance:SetText("")
     end
 end
 

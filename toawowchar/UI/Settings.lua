@@ -56,7 +56,9 @@ local function Checkbox(parent, label, y, key)
     box:SetPoint("TOPLEFT", 16, y)
     box.Text:SetText(label)
     box:SetScript("OnClick", part.Wrap(function(self)
-        DB().settings[key] = self:GetChecked() and true or false
+        local ok, checked = pcall(self.GetChecked, self)
+        if not ok or ns.IsSecret(checked) or type(checked) ~= "boolean" then return end
+        DB().settings[key] = checked
         if key == "navigationEnabled" then ns.Navigation.Refresh() end
         if key == "collect" and ns.Collect and ns.Collect.Forget then
             ns.Collect.Forget()

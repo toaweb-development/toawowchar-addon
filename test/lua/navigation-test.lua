@@ -99,7 +99,7 @@ elseif scenario == "transitions" then
     start(); local conversions = state.conversions
     tick(); assert(state.conversions == conversions + 1, "target should be cached")
     state.map = 3; tick(); assert(state.conversions == conversions + 3, "same target map transition must invalidate")
-    state.world = 4; tick(); assert(arrow.shown and state.conversions == conversions + 5)
+    state.world = 0; tick(); assert(arrow.shown and state.conversions == conversions + 5, "world zero is valid")
     for _, kind in ipairs({ "party", "raid", "pvp", "arena" }) do
         state.inside, state.kind = true, kind; unavailable()
     end
@@ -110,6 +110,18 @@ elseif scenario == "transitions" then
     assert(not sampler().scripts.OnUpdate and not arrow.shown)
     Env.combat = false; Env.fire("PLAYER_REGEN_ENABLED"); tick(); assert(arrow.shown)
     Env.fire("PLAYER_ENTERING_WORLD"); tick(); assert(arrow.shown)
+    Enum = { AddOnRestrictionType = { Map = 4 } }
+    C_RestrictedActions = { IsAddOnRestrictionActive = function() return state.restricted or false end }
+    -- Activating event precedes the API query: it must stop even while query is false.
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 1)
+    assert(not sampler().scripts.OnUpdate and text.text == ns.L.NAV_UNAVAILABLE)
+    state.restricted = true; Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 2)
+    assert(not sampler().scripts.OnUpdate)
+    state.restricted = false; Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 0); tick(); assert(arrow.shown)
+    state.restricted = secret; tick(); assert(not sampler().scripts.OnUpdate and not arrow.shown)
+    state.restricted = false; Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 0); tick(); assert(arrow.shown)
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", secret, secret); assert(not sampler().scripts.OnUpdate)
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 0); tick(); assert(arrow.shown)
 elseif scenario == "throttle" then
     nav.SetTarget(1, 60, 50); nav.Refresh()
     for _ = 1, 4 do tick(.01) end; assert(state.reads == 0)
@@ -121,7 +133,7 @@ elseif scenario == "throttle" then
     ns.DB().settings.navigationEnabled = false; nav.Refresh(); tick()
     assert(not sampler().scripts.OnUpdate and text.text == "" and not arrow.shown)
     ns.DB().settings.navigationEnabled = true; nav.Refresh(); tick(); assert(arrow.shown)
-    nav.part.Fail("test failure"); assert(not sampler().scripts.OnUpdate and not arrow.shown)
+    nav.part.Call(function() error("test failure") end); assert(not sampler().scripts.OnUpdate and not arrow.shown)
 elseif scenario == "waypoint" then
     local foreign = { uiMapID = 1, position = { x = .2, y = .3 } }
     state.waypoint = foreign; start(); assert(text.text == "100 yd")
@@ -143,6 +155,17 @@ elseif scenario == "settings" then
     toawowcharDB = { dbVersion = 3, guide = { shown = true }, realms = {}, settings = { navigationScale = math.huge, navigationEnabled = "bad" } }
     local db = ns.DB(); assert(db.settings.navigationScale == 1 and db.settings.navigationEnabled == true)
     assert(db.guide.shown and db.dbVersion == 3)
+    db.settings = secretTable; assert(ns.DB().settings.navigationScale == 1)
+    db.settings = { navigationEnabled = true, navigationScale = 1 }
+    Env.fire("PLAYER_LOGIN")
+    local _, controls = ns.SettingsPanel.Frame()
+    controls.navigation:SetChecked(false); controls.navigation.scripts.OnClick(controls.navigation)
+    assert(not ns.DB().settings.navigationEnabled)
+    controls.navigation:SetChecked(true); controls.navigation.scripts.OnClick(controls.navigation)
+    controls.larger.scripts.OnClick(); near(host.scale, 1.1)
+    controls.smaller.scripts.OnClick(); near(host.scale, 1)
+    for _ = 1, 20 do controls.larger.scripts.OnClick() end; near(host.scale, 1.5)
+    for _ = 1, 20 do controls.smaller.scripts.OnClick() end; near(host.scale, .75)
     for _, sample in ipairs({ { -5,.75 }, { 8,1.5 }, { .9,.9 }, { 0/0,1 }, { secret,1 } }) do
         db.settings.navigationScale = sample[1]; assert(ns.DB().settings.navigationScale == sample[2])
     end

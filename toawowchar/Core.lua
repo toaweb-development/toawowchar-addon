@@ -634,7 +634,12 @@ local function DB()
     if type(db.guide) ~= "table" then
         db.guide = {}
     end
-    if type(db.settings) ~= "table" then
+    local settingsSafe = not IsSecret(db.settings) and type(db.settings) == "table"
+    if settingsSafe and issecrettable then
+        local ok, secret = pcall(issecrettable, db.settings)
+        settingsSafe = ok and not IsSecret(secret) and type(secret) == "boolean" and not secret
+    end
+    if not settingsSafe then
         db.settings = {}
     end
     if type(db.settings.collect) ~= "boolean" then

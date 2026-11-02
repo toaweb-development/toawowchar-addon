@@ -160,8 +160,8 @@ describe('the guide: each kind of step moves on with its own event', () => {
 })
 
 describe('the guide: Skip, Back and Hide', () => {
-  it('has the three buttons', () => {
-    expect(get('buttons', 'labels')).toEqual([true, true, true])
+  it('has Back, Skip, Hide and explicit Map pin buttons', () => {
+    expect(get('buttons', 'labels')).toEqual([true, true, true, true])
   })
 
   it('Skip marks the step skipped and moves on; Back goes back, un-skips it and holds there', () => {
@@ -282,7 +282,7 @@ describe('the panel', () => {
     expect(c('in-combat')).toEqual([WAIT, false, true, true, true])
     expect(c('step-in-combat')).toEqual([2, true, WAIT])
     // the only writes in combat: the coordinate line and the distance, once each
-    expect(c('combat-writes')).toEqual(['coords:SetText', 'distance:SetText'])
+    expect(c('combat-writes')).toEqual(['sampler:Hide', 'distance:SetText', 'coords:SetText'])
     expect(c('after-combat')).toEqual(['Wolves || Boars', '|cff71d5ff42.1, 65.9|r', '24 yd', true])
   })
 })
@@ -360,7 +360,7 @@ describe('a guide or waypoint that hits an error: one chat line, that part off u
   })
 
   it('a new session has the guide again (shown at login with the setting on)', () => {
-    expect(f('after-reload')).toEqual([false, true, true, 0])
+    expect(f('after-reload')).toEqual([false, true, false, 0])
   })
 })
 

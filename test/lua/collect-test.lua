@@ -442,3 +442,251 @@ if scenario == "debounce" then
     Env.flushTimers()
     emit("after-combat", { #points(1301, 1) })
 end
+
+-- A-104: real-module acceptance probes. Secrets are modeled by opaque tables;
+-- __index traps prove rejection before indexing, not real-client secret VM behavior.
+local secretTables = {}
+issecrettable = function(v) return secretTables[v] == true end
+local function hiddenTable()
+    local t = setmetatable({}, { __index = function() error("indexed secret table", 0) end })
+    secretTables[t] = true
+    return t
+end
+local UNKNOWN = 2147483000 -- not present in the shipped guide; still within format-3 ID bounds
+local function seedUnknown()
+    offer(UNKNOWN, "Uncharted Forever Quest", 79999, "Uncharted Giver")
+    accept(UNKNOWN, "Uncharted Forever Quest", { { "Unknown relic: 0/50", 0, 50 } })
+end
+local function healthy()
+    return not Env.ns.Collect.part.IsOff()
+end
+
+if scenario == "independent" or scenario == "independent-absent" then
+    if scenario == "independent-absent" then
+        local files = Env.tocFiles
+        Env.tocFiles = function()
+            local result = {}
+            for _, path in ipairs(files()) do
+                if not path:find("Navigation.lua", 1, true) then result[#result + 1] = path end
+            end
+            return result
+        end
+    end
+    load()
+    assert(not Env.ns.Guide.state.route)
+    -- No guide startup or route lookup is needed. Failed parts must stay irrelevant.
+    Env.ns.Guide.part.Fail("test guide failure")
+    if Env.ns.Navigation then Env.ns.Navigation.part.Fail("test navigation failure") end
+    seedUnknown()
+    count(UNKNOWN, 1, 1)
+    local q = O().quests[UNKNOWN]
+    emit("independent", { q.title, q.giver, q.start, points(UNKNOWN, 1), healthy(), not Env.ns.Guide.state.route })
+
+elseif scenario == "record-caps" then
+    load()
+    for id = 1, 3000 do
+        O().quests[id] = { title = "Preserved quest " .. id, first = 1, last = 2 }
+        O().npcs[id] = { name = "Preserved NPC " .. id, first = 1, last = 2 }
+    end
+    Env.ns.Collect.Forget()
+    offer(3000, "Updated at cap", 3000, "Updated NPC")
+    offer(3001, "Rejected at cap", 3001, "Rejected NPC")
+    -- NPC cap is independent: an existing quest may reference a newly seen NPC.
+    offer(3000, "Updated at cap", 3001, "Rejected NPC")
+    emit("caps", { Env.ns.Collect.Counts() })
+    emit("preserved", { O().quests[1].title, O().npcs[1].name, O().quests[3000].title,
+        O().quests[3001] == nil, O().npcs[3001] == nil, O().quests[3000].giver })
+    toawowcharDB.settings.collect = false
+    Env.ns.Collect.Forget()
+    offer(3000, "Disabled", 3000, "Disabled")
+    toawowcharDB.settings.collect = true
+    Env.ns.Collect.Forget()
+    offer(3000, "Reenabled", 3000, "Reenabled")
+    emit("reenabled", { Env.ns.Collect.Counts() })
+    emit("updated", { O().quests[3000].title, O().npcs[3000].name })
+
+elseif scenario == "reload-points" then
+    load()
+    -- Realistic full objective lists, one slot free globally. First point after
+    -- session init must not be counted twice and evict an old valid point.
+    for id = 1, 200 do
+        local list = {}
+        for i = 1, (id == 200 and 19 or 20) do list[i] = { 2400, i * 40, id } end
+        O().quests[id] = { title = "Q" .. id, last = id, points = { list } }
+    end
+    Env.relog()
+    load()
+    accept(200, "Q200", { { "Relics: 0/50", 0, 50 } })
+    at(0.95, 0.95)
+    count(200, 1, 1)
+    emit("reload-points", { Env.ns.Collect.Counts() })
+    emit("no-eviction", { #O().quests[1].points[1], #points(200, 1) })
+
+elseif scenario == "storm" then
+    Env.useTimers()
+    load()
+    seedUnknown()
+    for burst = 1, 25 do
+        game.log[UNKNOWN].objectives[1][2] = burst
+        for _ = 1, 100 do
+            Env.fire("QUEST_LOG_UPDATE")
+            Env.fire("UNIT_QUEST_LOG_CHANGED", "player")
+        end
+        assert(#Env.timers == 1, "event storm multiplied timers")
+        Env.flushTimers()
+        assert(#Env.timers == 0, "timer callback rescheduled itself")
+    end
+    emit("storm", { #points(UNKNOWN, 1), healthy() })
+    -- Pending read survives the settings switch without multiplication/catch-up.
+    game.log[UNKNOWN].objectives[1][2] = 26
+    Env.fire("QUEST_LOG_UPDATE")
+    toawowcharDB.settings.collect = false
+    Env.ns.Collect.Forget()
+    Env.flushTimers()
+    toawowcharDB.settings.collect = true
+    Env.ns.Collect.Forget()
+    at(0.8, 0.8)
+    Env.fire("QUEST_LOG_UPDATE")
+    Env.flushTimers()
+    emit("baseline", { #points(UNKNOWN, 1) })
+    count(UNKNOWN, 1, 27)
+    Env.flushTimers()
+    emit("resumed", { #points(UNKNOWN, 1), #Env.timers })
+
+elseif scenario:find("^unsafe%-") then
+    load()
+    seedUnknown()
+    local mode = scenario:sub(8)
+    if mode == "position-table" then
+        C_Map.GetPlayerMapPosition = function() return hiddenTable() end
+    elseif mode == "position-scalar" then
+        C_Map.GetPlayerMapPosition = function() return SECRET end
+    elseif mode == "nan" then
+        game.x = 0 / 0
+    elseif mode == "infinite" then
+        game.x = math.huge
+    elseif mode == "range" then
+        game.x = -0.1
+    elseif mode == "missing" then
+        C_Map.GetPlayerMapPosition = nil
+    elseif mode == "raising" then
+        C_Map.GetPlayerMapPosition = function() error("position unavailable") end
+    elseif mode == "method-secret" then
+        C_Map.GetPlayerMapPosition = function() return { GetXY = SECRET } end
+    elseif mode == "objective-list" then
+        C_QuestLog.GetQuestObjectives = function() return hiddenTable() end
+    elseif mode == "objective-record" then
+        C_QuestLog.GetQuestObjectives = function() return { hiddenTable() } end
+    elseif mode == "objective-count" then
+        C_QuestLog.GetQuestObjectives = function() return { { text = SECRET, numFulfilled = SECRET, numRequired = SECRET } } end
+    elseif mode == "objective-nil" then
+        C_QuestLog.GetQuestObjectives = function() return { { text = "Available text" } } end
+    elseif mode == "level-table" then
+        C_QuestLog.GetQuestDifficultyLevel = nil
+        C_QuestLog.GetInfo = function() return hiddenTable() end
+    elseif mode == "map-list" or mode == "map-record" then
+        C_QuestLine.GetAvailableQuestLines = function()
+            if mode == "map-list" then return hiddenTable() end
+            return { hiddenTable() }
+        end
+    elseif mode == "map-parent" then
+        C_Map.GetMapInfo = function() return hiddenTable() end
+    elseif mode == "map-shown" then
+        WorldMapFrame.IsShown = function() error("map not available") end
+    elseif mode == "map-shown-secret" then
+        WorldMapFrame.IsShown = function() return SECRET end
+    elseif mode == "scalar-fields" then
+        GetTitleText = function() return SECRET end
+        GetObjectiveText = function() return SECRET end
+        UnitName = function() return SECRET end
+        UnitGUID = function() return SECRET end
+        GetNumQuestChoices = function() return SECRET end
+        C_QuestLog.GetQuestDifficultyLevel = function() return math.huge end
+        GetBuildInfo = function() return nil, SECRET end
+        time = function() return 0 / 0 end
+    elseif mode == "bad-ids" then
+        for _, id in ipairs({ SECRET, 0 / 0, math.huge, -1, 2147483648, 1.5 }) do
+            Env.fire("QUEST_ACCEPTED", id)
+        end
+    else error("unknown unsafe probe " .. mode) end
+    Env.fire("QUEST_ACCEPTED", UNKNOWN)
+    count(UNKNOWN, 1, 1)
+    if mode:find("^map%-") then
+        if mode == "map-parent" then openMap(2401) else openMap(2400) end
+    end
+    Env.fire("QUEST_TURNED_IN", UNKNOWN, SECRET, math.huge)
+    local q = O().quests[UNKNOWN]
+    emit("safe", { healthy(), q.title, q.giver, q.start, q.level, q.xp == nil, q.money == nil })
+    if mode == "nan" or mode == "infinite" or mode == "range" or mode == "missing" or mode == "raising"
+        or mode == "position-table" or mode == "position-scalar" or mode == "method-secret" then
+        emit("invalid-position", { #points(UNKNOWN, 1) })
+        C_Map.GetPlayerMapPosition = function() return { GetXY = function() return 0.8, 0.8 end } end
+        count(UNKNOWN, 1, 2)
+        emit("recovered", { healthy(), points(UNKNOWN, 1) })
+    end
+    if mode == "bad-ids" then emit("ids", { Env.ns.Collect.Counts() }) end
+
+elseif scenario == "restrictions" then
+    load()
+    seedUnknown()
+    local active = true
+    Enum = Enum or {}
+    Enum.AddOnRestrictionType = { Map = 7 }
+    C_RestrictedActions = { IsAddOnRestrictionActive = function() return active end }
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 7, 1)
+    at(0.7, 0.7)
+    count(UNKNOWN, 1, 1)
+    offer(UNKNOWN, "Metadata while restricted", 79999, "Uncharted Giver")
+    emit("restricted", { #points(UNKNOWN, 1), O().quests[UNKNOWN].title, healthy() })
+    active = false
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 7, 0)
+    count(UNKNOWN, 1, 2)
+    emit("unrestricted", { points(UNKNOWN, 1), healthy() })
+    -- Activating event wins even if the query has not changed yet.
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 7, 1)
+    at(0.9, 0.9)
+    count(UNKNOWN, 1, 3)
+    emit("activating", { #points(UNKNOWN, 1) })
+    Env.fire("ADDON_RESTRICTION_STATE_CHANGED", 7, 0)
+    count(UNKNOWN, 1, 4)
+    emit("restriction-resumed", { #points(UNKNOWN, 1) })
+
+elseif scenario == "persist-produce" then
+    load()
+    seedUnknown()
+    count(UNKNOWN, 1, 1)
+    -- Controlled primitive Lua literal, test-only. No game/import input is executed.
+    local function literal(v)
+        if type(v) == "table" then
+            local keys, entries = {}, {}
+            for k in pairs(v) do keys[#keys + 1] = k end
+            table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+            for _, k in ipairs(keys) do entries[#entries + 1] = "[" .. literal(k) .. "]=" .. literal(v[k]) end
+            return "{" .. table.concat(entries, ",") .. "}"
+        end
+        if type(v) == "string" then return string.format("%q", v) end
+        assert(type(v) == "number" or type(v) == "boolean")
+        return tostring(v)
+    end
+    toawowcharDB.realms.Preserved = { Character = { marker = "cache survives" } }
+    toawowcharDB.guide.saved = { step = 7 }
+    toawowcharDB.settings.guideAtLogin = false
+    emit("literal", "return " .. literal(toawowcharDB))
+    emit("observed", O())
+
+elseif scenario == "persist-consume" then
+    -- Fresh Lua process; only the Node test's generated temporary literal is loaded.
+    toawowcharDB = assert(loadfile(assert(arg[2])))()
+    local before = Env.ns -- no addon namespace from the producer process
+    load()
+    assert(before == Env.ns)
+    emit("observed", O())
+    emit("preserved", { toawowcharDB.dbVersion, toawowcharDB.realms.Preserved.Character.marker,
+        toawowcharDB.guide.saved.step, toawowcharDB.settings.guideAtLogin })
+    emit("counts", { Env.ns.Collect.Counts() })
+    accept(UNKNOWN, "Uncharted Forever Quest", { { "Unknown relic: 0/50", 1, 50 } })
+    count(UNKNOWN, 1, 1)
+    at(0.8, 0.8)
+    count(UNKNOWN, 1, 2)
+    emit("continued", { Env.ns.Collect.Counts() })
+end

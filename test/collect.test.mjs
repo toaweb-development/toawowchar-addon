@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from './lib/suite.mjs'
 import { expect } from './lib/expect.mjs'
@@ -202,5 +204,64 @@ describe('the settings panel', () => {
 
   it('an error turns off only the panel; the export still works', () => {
     expect(g('error')).toEqual([`${LABEL}the settings panel hit an error and is turned off for this session: settings broke`, true, false, 'WOWCHAR:3:'])
+  })
+})
+
+
+describe('A-104 collector acceptance with the real module', () => {
+  for (const mode of ['independent', 'independent-absent']) it(`${mode}: unknown ID with no route and failed guide`, () => {
+    expect(get(mode, 'independent')).toEqual(['Uncharted Forever Quest', 79999, [2400, 432, 568], [[2400, 432, 568]], true, true])
+  })
+  it('both 3000-record caps preserve old data and allow existing records to update after reenable', () => {
+    expect(get('record-caps', 'caps')).toEqual([3000, 3000, 0])
+    expect(get('record-caps', 'preserved')).toEqual(['Preserved quest 1', 'Preserved NPC 1', 'Updated at cap', true, true, 3001])
+    expect(get('record-caps', 'reenabled')).toEqual([3000, 3000, 0])
+    expect(get('record-caps', 'updated')).toEqual(['Reenabled', 'Reenabled'])
+  })
+  it('first point after session init fills slot 4000 without premature eviction', () => {
+    expect(get('reload-points', 'reload-points')).toEqual([200, 0, 4000])
+    expect(get('reload-points', 'no-eviction')).toEqual([20, 20])
+  })
+  it('5000 real log events produce one point, bounded timers, and no catch-up while disabled', () => {
+    expect(get('storm', 'storm')).toEqual([1, true])
+    expect(get('storm', 'baseline')).toEqual([1])
+    expect(get('storm', 'resumed')).toEqual([2, 0])
+  })
+  const positions = ['position-table', 'position-scalar', 'nan', 'infinite', 'range', 'missing', 'raising', 'method-secret']
+  for (const mode of [...positions, 'objective-list', 'objective-record', 'objective-count', 'objective-nil',
+    'level-table', 'map-list', 'map-record', 'map-parent', 'map-shown', 'map-shown-secret', 'scalar-fields', 'bad-ids']) {
+    it(`unsafe ${mode}: metadata survives and collector stays available`, () => {
+      expect(get(`unsafe-${mode}`, 'safe')).toEqual([true, 'Uncharted Forever Quest', 79999, [2400, 432, 568], 12, true, true])
+      if (positions.includes(mode)) {
+        expect(get(`unsafe-${mode}`, 'invalid-position')).toEqual([0])
+        expect(get(`unsafe-${mode}`, 'recovered')).toEqual([true, [[2400, 800, 800]]])
+      }
+      if (mode === 'bad-ids') expect(get(`unsafe-${mode}`, 'ids')).toEqual([1, 1, 1])
+    })
+  }
+  it('map restrictions pause positions only, including activating before query visibility', () => {
+    expect(get('restrictions', 'restricted')).toEqual([0, 'Metadata while restricted', true])
+    expect(get('restrictions', 'unrestricted')).toEqual([[[2400, 700, 700]], true])
+    expect(get('restrictions', 'activating')).toEqual([1])
+    expect(get('restrictions', 'restriction-resumed')).toEqual([2])
+  })
+  it('addon-generated dbVersion3 data survives serialized literal and fresh Lua process, including cache/guide/settings', () => {
+    const produced = scenario('persist-produce')
+    const dir = mkdtempSync(join(tmpdir(), 'a104-savedvariables-'))
+    try {
+      const path = join(dir, 'generated.lua')
+      writeFileSync(path, produced.get('literal'))
+      const r = spawnSync('lua', ['test/lua/collect-test.lua', 'persist-consume', path], { cwd: ROOT, encoding: 'utf8' })
+      expect(r.stderr).toBe('')
+      expect(r.status).toBe(0)
+      const data = new Map(r.stdout.trimEnd().split('\n').map(line => {
+        const tab = line.indexOf('\t')
+        return [line.slice(0, tab), JSON.parse(line.slice(tab + 1))]
+      }))
+      expect(data.get('observed')).toEqual(produced.get('observed'))
+      expect(data.get('preserved')).toEqual([3, 'cache survives', 7, false])
+      expect(data.get('counts')).toEqual([1, 1, 1])
+      expect(data.get('continued')).toEqual([1, 1, 2])
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 })

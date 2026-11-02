@@ -643,6 +643,14 @@ local function DB()
     if type(db.settings.guideAtLogin) ~= "boolean" then
         db.settings.guideAtLogin = false
     end
+    if IsSecret(db.settings.navigationEnabled) or type(db.settings.navigationEnabled) ~= "boolean" then
+        db.settings.navigationEnabled = true
+    end
+    local scale = db.settings.navigationScale
+    if IsSecret(scale) or type(scale) ~= "number" or scale ~= scale or scale == math.huge or scale == -math.huge then
+        scale = 1
+    end
+    db.settings.navigationScale = math.max(0.75, math.min(1.5, scale))
     if type(db.observed) ~= "table" then
         db.observed = {}
     end

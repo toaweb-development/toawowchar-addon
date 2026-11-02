@@ -56,6 +56,11 @@ C_QuestLog = {
 
 C_Map = {
     GetBestMapForUnit = function() return game.map end,
+    GetPlayerMapPosition = function()
+        local step = Env.ns.Guide.Current()
+        return { x = step[3] / 100 - (game.distance or 24) / 1000, y = step[4] / 100 }
+    end,
+    GetWorldPosFromMapPos = function(_, v) return 1, { x = v.x * 1000, y = v.y * 1000 } end,
     GetMapInfo = function(id) return { mapID = id, name = "map", mapType = 3, parentMapID = game.parents[id] or 0, flags = 0 } end,
     CanSetUserWaypointOnMap = function(id) return game.canSet[id] == true end,
     SetUserWaypoint = function(point)
@@ -72,6 +77,9 @@ C_Map = {
     HasUserWaypoint = function() return game.waypoint ~= nil end,
     GetUserWaypoint = function() return game.waypoint end,
 }
+CreateVector2D = function(x, y) return { x = x, y = y } end
+GetPlayerFacing = function() return 0 end
+IsInInstance = function() return false, "none" end
 UiMapPoint = {
     CreateFromCoordinates = function(mapID, x, y, z)
         return { uiMapID = mapID, position = { x = x, y = y }, z = z }
@@ -108,14 +116,11 @@ C_Timer = { NewTicker = function(seconds, fn)
 end }
 -- The ticker that is running now, or nil.
 local function running()
-    local live
-    for _, t in ipairs(tickers) do
-        if not t.cancelled then
-            assert(live == nil, "two tickers run at once")
-            live = t
+    for _, f in ipairs(Env.frames) do
+        if f.shown and f.scripts.OnUpdate then
+            return { seconds = 0.05, fn = function() f.scripts.OnUpdate(f, 0.05) end }
         end
     end
-    return live
 end
 
 -- ── the route ───────────────────────────────────────────────────────────
@@ -180,6 +185,8 @@ end
 -- the serializer writes whole numbers only.
 local function permille(v) return v and math.floor(v * 1000 + 0.5) or false end
 local function panel()
+    local sample = running()
+    if sample then sample.fn() end
     local w = Env.ns.GuideWindow.Widgets()
     local function t(fs) return fs.shown and fs.text and fs.text ~= "" and fs.text or false end
     local function tint(tx) return tx.tint and { permille(tx.tint[1]), permille(tx.tint[2]), permille(tx.tint[3]) } or false end
@@ -488,6 +495,7 @@ elseif scenario == "waypoint" then
     login()
     emit("hidden-no-waypoint", game.calls)
     Env.slash("/wowchar guide")
+    Env.ns.GuideWindow.Widgets().map.scripts.OnClick()
     emit("shown", game.calls)
     game.calls = {}
     game.log[101] = { objectives = {} }
@@ -510,10 +518,12 @@ elseif scenario == "waypoint" then
     load()
     login()
     Env.slash("/wowchar guide")
+    Env.ns.GuideWindow.Widgets().map.scripts.OnClick()
     emit("grind", { index(), game.calls })
     game.canSet[1436] = false
     Env.fire("PLAYER_LEVEL_UP", 5)
-    emit("refused-map", { index(), game.calls, Env.ns.Waypoint.Mine() or false })
+    Env.ns.GuideWindow.Widgets().map.scripts.OnClick()
+    emit("refused-map", { index(), game.calls, Env.ns.Waypoint.Mine() ~= nil })
     -- without the waypoint API the guide still works
     Env.relog()
     toawowcharDB = nil
@@ -601,6 +611,7 @@ elseif scenario == "failsafe" then
     fresh()
     login()
     Env.slash("/wowchar guide")
+    Env.ns.GuideWindow.Widgets().map.scripts.OnClick()
     local before = { shown(), Env.ns.Waypoint.Mine() ~= nil }
     game.calls = {}
     local events2 = guideFrame()
@@ -638,6 +649,7 @@ elseif scenario == "failsafe" then
     C_SuperTrack = setmetatable({}, { __index = function() error("super track broke", 0) end })
     login()
     Env.slash("/wowchar guide")
+    Env.ns.GuideWindow.Widgets().map.scripts.OnClick()
     local first = { guideLines(), game.calls }
     game.calls = {}
     game.log[101] = { objectives = {} }
@@ -789,7 +801,7 @@ elseif scenario == "panel" then
     game.level = 5
     local before = #tickers
     Env.fire("PLAYER_LEVEL_UP", 5)
-    emit("accept-again", { running() ~= nil, #tickers > before })
+    emit("accept-again", { running() ~= nil, #tickers == before })
     Env.slash("/wowchar guide")
     emit("hidden", { running() == nil })
 

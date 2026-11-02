@@ -24,6 +24,7 @@ ZIP_FILES = (
     "Export.lua",
     "Guide.lua",
     "Locales/enUS.lua",
+    "Navigation.lua",
     "README.md",
     "Serializer.lua",
     "UI/GuideWindow.lua",

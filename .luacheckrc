@@ -31,6 +31,7 @@ read_globals = {
     -- the player and the client
     "GetBuildInfo", "GetCVar", "GetCurrentRegion", "GetInventoryItemID", "GetInventoryItemLink",
     "GetMoney", "GetProfessionInfo", "GetProfessions", "GetRealmName", "GetTaxiMapID",
+    "CreateVector2D", "GetPlayerFacing", "issecrettable",
     "GetSubZoneText", "GetXPExhaustion", "GetZoneText", "issecretvalue", "IsInInstance",
     -- the quest frame (QUEST_DETAIL, QUEST_COMPLETE)
     "GetNumQuestChoices", "GetObjectiveText", "GetQuestID", "GetQuestItemInfo", "GetQuestItemInfoLootType",

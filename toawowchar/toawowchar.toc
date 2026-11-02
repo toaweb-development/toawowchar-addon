@@ -13,6 +13,7 @@ UI\Window.lua
 Data\Routes.lua
 Waypoint.lua
 Guide.lua
+Navigation.lua
 UI\GuideWindow.lua
 Collect.lua
 UI\Settings.lua

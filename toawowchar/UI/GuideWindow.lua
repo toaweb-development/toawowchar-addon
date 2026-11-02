@@ -48,13 +48,7 @@
 --   Atlas markup |A:name:h:w:x:y:r:g:b|a: Blizzard_SharedXMLBase/TextureUtil.lua:289.
 --   Class colour: C_ClassColor.GetClassColor (ClassColorDocumentation.lua:11), else
 --     RAID_CLASS_COLORS (Blizzard_SharedXML/ClassColors.lua:1); UnitClass (UnitDocumentation.lua:911).
---   Distance: C_Navigation.GetDistance and GetTargetState (InGameNavigationDocumentation.lua:11,
---     :57; Blizzard reads them
---     the same way, Blizzard_QuestNavigation/SuperTrackedFrame.lua:202), only while the game
---     super-tracks this addon's waypoint (C_SuperTrack.IsSuperTrackingUserWaypoint,
---     SuperTrackManagerDocumentation.lua:128). Read on C_Timer.NewTicker
---     (UITimerDocumentation.lua:22) every DISTANCE_SECONDS, never on OnUpdate; the ticker
---     stops when the window hides, in combat and when the guide turns off.
+--   Navigation atlas/rotation/scale: pinned sources in docs/status/a-103.md.
 --   Tooltips: GameTooltip (Blizzard_GameTooltip/Mainline/GameTooltip.xml:249), SetOwner, SetText, Hide.
 --   Zone: GetSubZoneText, GetZoneText (ZoneScriptDocumentation.lua:43, :52).
 local _, ns = ...
@@ -87,7 +81,6 @@ local LINE = {                         -- the height each line takes
     following = 18, progress = 5,
 }
 local BLOCK_PAD = 6                    -- above and below the current step
-local DISTANCE_SECONDS = 0.5           -- the distance is read at most twice a second
 
 -- Colours for |c markup (alpha, red, green, blue), and as 0..1 numbers for textures.
 local COLOR = {
@@ -139,10 +132,7 @@ local frame
 local widgets = {}
 -- What combat held back: visible = true/false (show or hide when it ends), update = true.
 local pending = {}
--- The step the waypoint was set for (route index), so a refresh does not set it again.
-local waypointStep
--- The distance ticker, and whether the current step has a place to measure to.
-local ticker
+-- Whether the current step has coordinates to navigate to.
 local measuring = false
 
 local function Saved()
@@ -352,6 +342,18 @@ local function Create()
     widgets.coords = Text(f, "GameFontHighlightSmall")
     widgets.distance = Text(f, "GameFontHighlightOutline")
     widgets.distance:SetPoint("LEFT", widgets.coords, "RIGHT", 8, 0)
+    widgets.arrow = f:CreateTexture(nil, "OVERLAY")
+    widgets.arrow:SetSize(24, 24)
+    widgets.arrow:SetPoint("TOPRIGHT", -PAD, -LINE.header - LINE.rule - 6)
+    ns.Navigation.Attach(f, widgets.arrow, widgets.distance)
+    widgets.map = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    widgets.map:SetSize(74, 20)
+    widgets.map:SetPoint("BOTTOMRIGHT", -PAD, PAD + 8)
+    widgets.map:SetText(L["NAV_MAP"])
+    widgets.map:SetScript("OnClick", part.Wrap(function()
+        local step = Guide.Current()
+        if step then Waypoint.Set(step[2], step[3], step[4]) end
+    end))
     widgets.xp = Bar(f, column, 5)
     widgets.message = Text(f, "GameFontHighlight", WIDTH - 2 * PAD, 2)
 
@@ -394,55 +396,15 @@ local function HasPlace(current)
     return current.kind == kinds.accept or current.kind == kinds.objective or current.kind == kinds.turnin
 end
 
--- Yards to this addon's waypoint while the game super-tracks it, as text; "" otherwise.
-local function Distance()
-    if not (C_Navigation and C_Navigation.GetDistance and Waypoint.Mine()) then
-        return ""
-    end
-    if C_SuperTrack and C_SuperTrack.IsSuperTrackingUserWaypoint then
-        local ok, tracked = pcall(C_SuperTrack.IsSuperTrackingUserWaypoint)
-        if not ok or not tracked then
-            return ""
-        end
-    end
-    -- As Blizzard's marker does (Blizzard_QuestNavigation/SuperTrackedFrame.lua:80): no distance
-    -- while the game's navigation target is Invalid (0) or Disabled (3)
-    -- (InGameNavigationDocumentation.lua:118, NavigationState).
-    if C_Navigation.GetTargetState then
-        local okState, navState = pcall(C_Navigation.GetTargetState)
-        if not okState or ns.IsSecret(navState) or navState == 0 or navState == 3 then
-            return ""
-        end
-    end
-    local ok, d = pcall(C_Navigation.GetDistance)
-    if not ok or ns.IsSecret(d) or type(d) ~= "number" or d < 0 or d > 100000 then
-        return ""
-    end
-    return string.format(L["YARDS"], math.floor(d + 0.5))
-end
-
-local function UpdateDistance()
-    if not (frame and frame:IsShown()) or InCombat() then
-        return
-    end
-    widgets.distance:SetText(measuring and Distance() or "")
-end
-
+-- Navigation owns the arrow, distance and sampled updates, independently of supertracking.
 local function StopTicker()
-    if ticker then
-        pcall(ticker.Cancel, ticker)
-        ticker = nil
-    end
+    ns.Navigation.Stop()
 end
 
 local function StartTicker()
-    if ticker or not measuring or InCombat() or not (frame and frame:IsShown()) then
-        return
-    end
-    if C_Timer and C_Timer.NewTicker then
-        local ok, t = pcall(C_Timer.NewTicker, DISTANCE_SECONDS, part.Wrap(UpdateDistance))
-        ticker = ok and type(t) == "table" and t or nil
-    end
+    local step = Guide.Current()
+    ns.Navigation.SetTarget(step and step[2], step and step[3], step and step[4])
+    ns.Navigation.Refresh()
 end
 
 -- Writes the view into the window and sizes it (out of combat only).
@@ -525,7 +487,7 @@ local function Draw()
             measuring = true
             widgets.coords:SetText(Colored(COLOR.coords, string.format(L["COORDS"], current.x, current.y)))
             widgets.distance:Show()
-            widgets.distance:SetText(Distance())
+            widgets.distance:SetText("")
         elseif current.grind then
             local g = current.grind
             widgets.coords:SetText(Colored(COLOR.hint, g.xp and string.format(L["GRIND_XP"], g.xp) or string.format(L["GRIND_LEVEL"], g.target)))
@@ -582,25 +544,9 @@ local function Draw()
     end
 end
 
--- The waypoint follows the current step while the guide is meant to be shown: every step has
--- one at its place (travel and grind steps: the middle of their zone); none when the route is
--- done. A map the game refuses leaves no old marker behind: the guide's own is cleared.
+-- Native markers are set only by the explicit Map pin button. Step refresh never sets one.
 local function UpdateWaypoint()
-    local step = Guide.Current()
-    if not (Saved().shown == true and step) then
-        if waypointStep then
-            Waypoint.Clear()
-            waypointStep = nil
-        end
-        return
-    end
-    local index = Guide.state.index
-    if waypointStep ~= index then
-        waypointStep = index
-        if not Waypoint.Set(step[2], step[3], step[4]) then
-            Waypoint.Clear()
-        end
-    end
+    if Saved().shown ~= true then Waypoint.Clear() end
 end
 
 -- Shows or hides the frame now, or after combat.
@@ -613,6 +559,7 @@ local function Apply(visible)
     if visible then
         frame = frame or Create()
         Place()
+        ns.Navigation.ApplyScale()
         frame:Show()
         Draw()
     elseif frame then
@@ -644,6 +591,7 @@ end
 
 function GuideWindow.Hide()
     Saved().shown = false
+    StopTicker()
     UpdateWaypoint()
     Apply(false)
 end
@@ -686,6 +634,7 @@ function GuideWindow.CombatEnded()
     if pending.visible ~= nil then
         Apply(pending.visible) -- draws when it shows
     elseif frame and frame:IsShown() then
+        ns.Navigation.ApplyScale()
         Draw()
     end
 end

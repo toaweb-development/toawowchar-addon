@@ -83,6 +83,7 @@ local function newTexture(parent)
         if key == "Hide" then return function(self) self.shown = false end end
         if key == "Show" then return function(self) self.shown = true end end
         if key == "SetPoint" then return function(self, ...) self.points[#self.points + 1] = { ... } end end
+        if key == "SetRotation" then return function(self, radians) self.rotation = radians end end
         if key == "SetAtlas" then return function(self, atlas) self.atlas = atlas end end
         if key == "SetVertexColor" then return function(self, r, g, b) self.tint = { r, g, b } end end
         if key == "SetGradient" then return function(self, orientation, from, to) self.gradient = { orientation, from, to } end end
@@ -124,6 +125,7 @@ frameMethods.GetPoint = function(self)
     return p[1], p[2], p[3], p[4], p[5]
 end
 frameMethods.SetSize = function(self, w, h) self.width, self.height = w, h end
+frameMethods.SetScale = function(self, scale) self.scale = scale end
 frameMethods.SetWidth = function(self, w) self.width = w end
 frameMethods.SetHeight = function(self, h) spy(self, "SetHeight"); self.height = h end
 frameMethods.Show = function(self)

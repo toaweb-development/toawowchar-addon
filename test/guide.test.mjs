@@ -267,11 +267,11 @@ describe('the panel', () => {
     expect(p('travel')[0].height).toBeLessThan(p('accept').height)
   })
 
-  it('the distance: a ticker every half second, the game\'s distance to our waypoint while it is super-tracked; it stops when hidden', () => {
-    expect(p('ticker')).toEqual([500, 1])
+  it('addon distance: sampled at 20Hz, independent of native tracking, stopped when hidden', () => {
+    expect(p('ticker')).toEqual([50, 0])
     expect(p('tick')).toEqual(['131 yd'])
-    expect(p('not-tracked')).toEqual([false])
-    expect(p('nav-invalid')).toEqual([false])
+    expect(p('not-tracked')).toEqual(['131 yd'])
+    expect(p('nav-invalid')).toEqual(['131 yd'])
     expect(p('accept-again')).toEqual([true, true])
     expect(p('hidden')).toEqual([true])
   })
@@ -288,10 +288,10 @@ describe('the panel', () => {
 })
 
 describe('the guide: the game\'s waypoint', () => {
-  it('none while the guide is hidden; shown: a user waypoint on the step\'s map and coordinates, super-tracked', () => {
+  it('explicit Map pin request: a user waypoint on the step\'s map and coordinates, super-tracked', () => {
     expect(get('waypoint', 'hidden-no-waypoint')).toEqual([])
     expect(get('waypoint', 'shown')).toEqual([['set', 1429, 421, 659], ['track', true]])
-    expect(get('waypoint', 'next-step')).toEqual([['set', 1429, 421, 659], ['track', true]])
+    expect(get('waypoint', 'next-step')).toEqual([])
   })
 
   it('cleared when the guide is hidden, but never a waypoint the player placed', () => {
@@ -299,9 +299,9 @@ describe('the guide: the game\'s waypoint', () => {
     expect(get('waypoint', 'players-own')).toEqual([[], true])
   })
 
-  it('a grind step too (the middle of its zone); on a map the game refuses the guide\'s old one is cleared; it works without the waypoint API', () => {
+  it('a grind step too (the middle of its zone); a refused explicit request preserves the previous marker; it works without the waypoint API', () => {
     expect(get('waypoint', 'grind')).toEqual([7, [['set', 1436, 500, 500], ['track', true]]])
-    expect(get('waypoint', 'refused-map')).toEqual([8, [['set', 1436, 500, 500], ['track', true], ['clear']], false])
+    expect(get('waypoint', 'refused-map')).toEqual([8, [['set', 1436, 500, 500], ['track', true]], true])
     expect(get('waypoint', 'no-api')).toEqual([1, true])
   })
 })

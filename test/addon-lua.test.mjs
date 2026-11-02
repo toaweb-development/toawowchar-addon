@@ -805,7 +805,7 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
 
     it('/wowchar reset clears this character: the cache is gone, the bank is not seen, one line is said', () => {
       expect(plain(m, 'chat-reset')).toEqual(['toawowchar: cleared the saved data of this character.'])
-      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false } })
+      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false, navigationEnabled: true, navigationScale: 1 } })
       const j = exportOf(m, 'after-reset')
       expect(j.bank).toEqual([])
       expect(j.bankSeen).toBe(false)
@@ -1259,8 +1259,8 @@ describe('the addon\'s Lua (Lua 5.1)', () => {
       const m = snap('reset')
       expect(json(m, 'scheduled')).toEqual([1])
       expect(json(m, 'before-reset')).toEqual([1])
-      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false } })
-      expect(json(m, 'db-after-timer')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false } })
+      expect(json(m, 'db-after-reset')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false, navigationEnabled: true, navigationScale: 1 } })
+      expect(json(m, 'db-after-timer')).toEqual({ dbVersion: 3, guide: [], observed: { npcs: [], quests: [] }, realms: { Forever: [] }, settings: { collect: true, guideAtLogin: false, navigationEnabled: true, navigationScale: 1 } })
       expect(plain(m, 'chat')).toEqual(['toawowchar: cleared the saved data of this character.'])
       expect(json(m, 'fresh')).toEqual([1, 1]) // the next event starts fresh, not throttled
     })

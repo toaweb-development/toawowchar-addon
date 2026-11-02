@@ -38,6 +38,7 @@ local function Refresh()
     local s = DB().settings
     widgets.collect:SetChecked(s.collect == true)
     widgets.guide:SetChecked(s.guideAtLogin == true)
+    widgets.navigation:SetChecked(s.navigationEnabled == true)
     local quests, npcs, points = 0, 0, 0
     local collect = ns.Collect
     if collect and collect.Counts then
@@ -56,6 +57,7 @@ local function Checkbox(parent, label, y, key)
     box.Text:SetText(label)
     box:SetScript("OnClick", part.Wrap(function(self)
         DB().settings[key] = self:GetChecked() and true or false
+        if key == "navigationEnabled" then ns.Navigation.Refresh() end
         if key == "collect" and ns.Collect and ns.Collect.Forget then
             ns.Collect.Forget()
         end
@@ -72,8 +74,23 @@ local function Create()
     title:SetText(L["SETTINGS_TITLE"])
     widgets.collect = Checkbox(f, L["SETTINGS_COLLECT"], -48, "collect")
     widgets.guide = Checkbox(f, L["SETTINGS_GUIDE_AT_LOGIN"], -80, "guideAtLogin")
+    widgets.navigation = Checkbox(f, L["SETTINGS_NAVIGATION"], -112, "navigationEnabled")
+    local function ScaleButton(label, x, delta)
+        local button = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        button:SetPoint("TOPLEFT", x, -152)
+        button:SetSize(125, 24)
+        button:SetText(label)
+        button:SetScript("OnClick", part.Wrap(function()
+            local settings = DB().settings
+            settings.navigationScale = math.max(0.75, math.min(1.5, settings.navigationScale + delta))
+            ns.Navigation.ApplyScale()
+        end))
+        return button
+    end
+    widgets.smaller = ScaleButton(L["SETTINGS_NAV_SMALLER"], 20, -0.1)
+    widgets.larger = ScaleButton(L["SETTINGS_NAV_LARGER"], 155, 0.1)
     widgets.stored = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    widgets.stored:SetPoint("TOPLEFT", 20, -120)
+    widgets.stored:SetPoint("TOPLEFT", 20, -192)
     widgets.stored:SetJustifyH("LEFT")
     f:SetScript("OnShow", part.Wrap(Refresh))
     return f

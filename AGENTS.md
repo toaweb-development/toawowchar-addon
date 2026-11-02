@@ -11,7 +11,7 @@ Prosjektinstruksene følger toaweb-rules v0.14.0 med
 - Uten MCP: les nødvendige seksjoner i lokal toaweb-rules/standards og rapporter avviket.
 - Les [prosjektbeslutninger](docs/project-decisions.md) og [eierens addonregler](docs/wow-addon-rules.md).
   Gammel agentguide er bevart via beslutningsoversikten; harde eierregler gjelder fortsatt.
-- [README](README.md) har utviklerkommandoer; [status](docs/status/p-002.md) har oppgaver/gates.
+- [README](README.md) har utviklerkommandoer; [status](docs/status/a-101.md) har oppgaver/gates.
 
 ## Kommandoer
 

@@ -1,6 +1,6 @@
 # A-105 — klientprosedyre og proveniens
 
-Dato: 2026-11-02. **Utkast. Alle faktiske klientprøver: NOT TESTED.**
+Dato: 2026-11-02. **Finalisert prosedyre. Alle faktiske klientprøver: NOT TESTED.**
 Dette er en manuell gate etter A-102/A-103/A-104, ikke releasegodkjenning.
 Webdelen finnes i søsterrepoets `docs/testing/a-105-client-import-gate.md`.
 L0 i eierens `TOAWOWCHAR_2_0_CODEX_MASTERPLAN.md` er akseptansegrunnlaget.
@@ -68,7 +68,7 @@ Navigation.lua SHA256:
 2. Testoperatøren installerer en ren mappe fra kandidaten etter backup, uten å
    legge den over en blanding av gamle filer. Kontroller riktig `_forever_`-mappe,
    alle zipfiler, TOC og SHA256 på nytt. Noter ziphash, kildecommit og installert
-   filhash som separate proveniensfelt. Ingen installasjon er utført av utkastet.
+   filhash som separate proveniensfelt. Ingen kandidatinstallasjon er utført i A-105.
 3. Deaktiver andre addons i klientens addonliste. Dokumenter avvik. Slå på
    Lua-feil med `/console scriptErrors 1`; noter gammel innstilling for tilbakeføring.
 4. Bekreft faktisk klientversjon/build og interface i klienten med `GetBuildInfo`.
@@ -157,3 +157,75 @@ før tilbakeføring av backup. Ikke endre runtime for å få grønt. Etter teste
 tilbakefør testinnstillinger, behold private bevis sikkert og registrer PASS,
 FAIL eller NOT TESTED per rad i [status](../status/a-105.md). Release, pinning,
 produksjonskontakt og mainmerge inngår ikke.
+
+## PM-evidens — lokal syntetisk UI-prøve
+
+Kilde: PM-arbeidsmappens `work/a105/pm-evidence.json`,
+2026-11-02T11:02:41.266747+00:00. Webruntime `6902693`, testet docs-HEAD
+`850d41a`; ingen runtimeendring. Codex in-app browser mot `http://localhost:3105`,
+loopback-only engangs-PG17.11 på tmpfs med ny a105-DB, syntetisk dev-seed og
+kopierte avhengigheter. Ingen repo-.env, Battle.net-credentials eller produksjonskontakt;
+Questie-import var av. Lokal HTTP-devlogin med kryptert cookieøkt er **ikke OAuth**.
+
+Fixture: syntetisk addon-generert W-101-fil, **ikke faktisk klientdata**,
+834 byte, SHA256
+`5b1cd2c95538dfc41b2f158f83ed5002ffd8dd1c5c7ea81c902524281e7f73df`.
+W-101-testene ble ikke kjørt på nytt.
+
+| Prøve | PM-resultat og avgrensning |
+|---|---|
+| Faktisk UI-filvelger og opplasting i dev | PASS: read quests/NPCs/points 1/1/1, 0.02 s |
+| Identisk gjenimport i dev | PASS: read 1/1/1, 0.01 s; totals fortsatt 1/1/1 |
+| Reload og ny lokal innlogging | PASS: totals 1/1/1, build 70532; gjelder web, ikke klientpersistens |
+| «Download my data» via UI | PASS: JSON 1/1/1, quest/NPC 2147483000/79999, map 2400, koordinater 43.2/56.8 |
+| Fysisk DB-kontroll | PASS: observed_quests/observed_npcs/observed_points 1/1/1 |
+| Trunkert fil i dev | PASS: synlig «not plain data» ved offset 52; totals fortsatt 1/1/1 |
+| Anonym adminside og GET /api/admin/addon-file | Redirect /login gjennom full middleware; W-101s handler-only 403 beskriver et annet lag |
+| Player adminside og GET /api/admin/addon-file | Side redirect /; API viser 403 Forbidden |
+| Admin/player/logout-flyt | Lokale admin-/playerroller prøvd; logout → lokal adminlogin → Home → BiS admin PASS i bygget, totals 1/1/1 |
+| Ferskt Nuxt-bygg | PASS: nuxt build exit 0, 9.97 s; faktisk filvelger + Upload også i bygget: read 1/1/1, 0.01 s, uendrede totals |
+| Konsoll i bygget | Ingen warning/error-oppføringer fanget |
+| Dev-avvik | Unstyled side og blankt innhold Home → BiS admin med NUXT_E4004; reload hjalp. Ikke reprodusert i ferskt bygg, derfor ikke bevist launchblocker |
+
+PM oppgir skjermbilde `outputs/TOAWOWCHAR-A-105-import-build.png` i arbeidsmappen.
+Dette er referert PM-evidens, ikke en ny nettleser-/DB-/byggkjøring av docsforfatteren.
+Ingen direkte POST 403 for anonym/player, rå POST-HTTP-status eller Origin-/CSRF-header
+ble dokumentert. HTTP oversized-/CSRF-prober er ikke nye bevis her. Ingen
+telefonviewport- eller fokus-/tilgjengelighetsprøve er utført. Battle.net callback/state,
+ekte rolleoppslag og produksjonens Secure-cookie/proxy/TLS-kjede er NOT TESTED.
+PM-opprydding er oppgitt som pending i evidensen og håndteres separat etterpå;
+fullført cleanup påstås ikke her.
+
+## Prioriterte åpne blockere
+
+Prioritetene angir rekkefølge før gaten kan lukkes, ikke nye implementasjonsoppdrag.
+Kandidaten er klar for **MANUELL TESTINSTALLASJON**, aldri launchklar på dette grunnlaget.
+
+| Prioritet | Blocker | Løsning | Eier | Akseptanse |
+|---|---|---|---|---|
+| P0 | Faktisk klient: reload/persistens/unknown quests og øvrige L0-klientkrav mangler | Backup, ren kandidatinstallasjon og manuell klientprosedyre; ingen reset | Eier/klienttestoperatør | Riktig manifest/hash og faktisk build/interface; unknown quest utenfor rutene med giver/objective/turn-in, samme data etter reload og lukket klient/disk; alle påkrevde L0-klientrader PASS; enhver åpen rad holder gaten åpen |
+| P0 | Ekte OAuth → UI → faktisk klientfil → identisk gjenimport mangler | Separat godkjent testmiljø med Battle.net OAuth og privat klientkopi | Eier godkjenner miljø; PM/testoperatør utfører | Faktisk callback/state/roller, admin/player/logout, filvelger/opplasting/gjenimport, semantiske felt og fysiske tellinger dokumentert; auth-/HTTP-påstander bare ved observert bevis |
+| P1 | Pin/release 0.4.1 er kun kildestatus; live produksjon ikke verifisert | Separat godkjent release-/pin-avklaring og eventuell verifikasjon; ingen operasjon her | Eier/releaseansvarlig | Godkjent beslutning om versjon/pin og separat dokumentert samsvar for artefakt/hash/manifest og faktisk live status før release-/launchpåstand |
+
+Pin/release krever separat eiergodkjenning. Ingen runtime, pin, versjon, prod,
+mainmerge eller ny oppgave er implementert i denne docsfinaliseringen.
+
+## Dokumentkontroll og review
+
+Docsforfatteren gjentar verken research, masterplanfulltekst, W-101-tester eller
+runtime-/fullsjekker. Kun de to A-105-dokumentene i hvert arbeidsklonrepo endres.
+AGENTS.md er uendret: ingen kommando, verktøy eller hard regel er endret.
+Målrettede commits, diff-sjekk, check-agents og reviewresultat registreres i
+PM-arbeidsmappens `work/a105/final-ready.json`. Originalrepoene røres ikke.
+
+Én native security-reviewer med ren kontekst gjennomførte docs/auth/input-
+proveniensreview mot webbase `6902693` og addonbase `aae2e48`.
+**Resultat: ingen funn; godkjent kun for dokumentfinaliseringen.** Ingen
+Critical/High-funn eller feil i akseptansen; ingen åpne reviewfunn. Én runde.
+Revieweren kunne lese lokale filer: begge AGENTS.md/prosjektbeslutninger,
+alle fire dokumenter, basediffer, commitlogger, draft-ready.json og pm-evidence.json.
+PM-resultatene ble sammenholdt med levert evidens, ikke uavhengig gjenskapt;
+revieweren utførte ingen runtime-, klient-, nettleser-, DB-, OAuth- eller
+cleanup-verifikasjon og gjentok ingen tester. Dokumentreview lukker ikke
+klient-, OAuth- eller launch-gatene. Diff-sjekk, check-agents og relative
+lenkekontroller: PASS i begge kloner.

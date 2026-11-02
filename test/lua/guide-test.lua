@@ -286,6 +286,71 @@ elseif scenario == "login" then
     Env.fire("QUEST_LOG_UPDATE")
     emit("late-log", { before, index() })
 
+elseif scenario == "objective-matching" then
+    -- Exercise the real guide's login positioning and event-driven progress on step 4.
+    -- Quest 101 is already turned in; quest 102 must stop at its objective or turn-in.
+    local function prepare(note, objectives)
+        Env.relog()
+        toawowcharDB = nil
+        game.completed, game.log = { [101] = true }, { [102] = { objectives = objectives } }
+        load()
+        Env.ns.RouteData.texts = { unpack(T) }
+        Env.ns.RouteData.texts[3] = note
+    end
+    local function objectives(secondText, firstDone, secondDone)
+        return { { "Tough Wolf Meat: 8/8", firstDone }, { secondText, secondDone } }
+    end
+    local function progression(label, note, secondText, event)
+        prepare(note, objectives(secondText, true, false))
+        login()
+        local loginOne = index()
+        prepare(note, objectives(secondText, true, true))
+        login()
+        local loginBoth = index()
+
+        prepare(note, objectives(secondText, false, false))
+        login()
+        -- Consume the first log update before changing progress: subsequent events use Settle.
+        Env.fire("QUEST_LOG_UPDATE")
+        local before = index()
+        game.log[102].objectives[1][2] = true
+        Env.fire(event, "player")
+        local one = index()
+        game.log[102].objectives[2][2] = true
+        Env.fire(event, "player")
+        emit(label, { loginOne, loginBoth, before, one, index() })
+    end
+    progression("partial-log", "Tough Wolf Meat; Boar Hide", "Bristly Pelt: 2/6", "QUEST_LOG_UPDATE")
+    progression("partial-unit", "Tough Wolf Meat; Boar Hide", "Bristly Pelt: 2/6", "UNIT_QUEST_LOG_CHANGED")
+    progression("full", "Tough Wolf Meat; Boar Hide", "Boar Hide: 2/6", "QUEST_LOG_UPDATE")
+    progression("no-match", "Unrecognized objective", "Boar Hide: 2/6", "QUEST_LOG_UPDATE")
+    progression("empty-note", "", "Boar Hide: 2/6", "QUEST_LOG_UPDATE")
+    progression("changed-text", "Tender Wolf Meat; Sturdy Boar Hide", "Bristly Pelt: 2/6", "QUEST_LOG_UPDATE")
+    progression("single-part", "Tough Wolf Meat", "Boar Hide: 2/6", "QUEST_LOG_UPDATE")
+    -- Both notes can match the first line; the broad, repeated "Wolf" also matches an unfinished line.
+    progression("overlapping-parts", "Wolf; Tough Wolf Meat; Wolf", "Wolf Pelt: 2/6", "QUEST_LOG_UPDATE")
+
+    prepare("Tough Wolf Meat; Boar Hide", objectives("Bristly Pelt: 2/6", false, false))
+    game.log[102].complete = true
+    login()
+    local completeLogin = index()
+    prepare("Tough Wolf Meat; Boar Hide", objectives("Bristly Pelt: 2/6", false, false))
+    login()
+    Env.fire("QUEST_LOG_UPDATE")
+    game.log[102].complete = true
+    Env.fire("QUEST_LOG_UPDATE")
+    emit("complete-quest", { completeLogin, index() })
+
+    prepare("Tough Wolf Meat; Boar Hide", {})
+    game.completed[102], game.log[102] = true, nil
+    login()
+    local turnedInLogin = index()
+    prepare("Tough Wolf Meat; Boar Hide", objectives("Bristly Pelt: 2/6", false, false))
+    login()
+    game.log[102] = nil
+    Env.fire("QUEST_TURNED_IN", 102)
+    emit("turned-in-quest", { turnedInLogin, index() })
+
 elseif scenario == "advance" then
     -- Every kind of step moves on with its own event, and only then.
     load()

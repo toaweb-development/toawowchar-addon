@@ -81,6 +81,45 @@ describe('the guide: login and /reload skip to the first step whose quests are n
   })
 })
 
+describe('the guide: objective notes must account for unfinished quest work', () => {
+  // Step 4 is the objective; step 5 is the turn-in. Each trail records login with one/both
+  // done, then event progress with neither/one/both done, after the initial log reposition.
+  it.each([
+    ['partial-log', 'QUEST_LOG_UPDATE'],
+    ['partial-unit', 'UNIT_QUEST_LOG_CHANGED'],
+  ])('a partial note match stays on the objective at login and on %s (%s)', (label) => {
+    expect(get('objective-matching', label)).toEqual([4, 5, 4, 4, 5])
+  })
+
+  it('a fully recognizable two-part note waits for both objectives at login and on events', () => {
+    expect(get('objective-matching', 'full')).toEqual([4, 5, 4, 4, 5])
+  })
+
+  it.each([
+    ['no-match', 'no text matches'],
+    ['empty-note', 'the note is empty'],
+    ['changed-text', 'both objective texts have changed'],
+  ])('waits for all quest objectives when %s (%s)', (label) => {
+    expect(get('objective-matching', label)).toEqual([4, 5, 4, 4, 5])
+  })
+
+  it('an explicit one-part step advances when its target is done despite an unrelated unfinished objective', () => {
+    expect(get('objective-matching', 'single-part')).toEqual([5, 5, 4, 5, 5])
+  })
+
+  it('overlapping and duplicate note parts cannot hide an unfinished matching objective', () => {
+    expect(get('objective-matching', 'overlapping-parts')).toEqual([4, 5, 4, 4, 5])
+  })
+
+  it('a complete quest advances to turn-in even with unfinished or changed objective lines', () => {
+    expect(get('objective-matching', 'complete-quest')).toEqual([5, 5])
+  })
+
+  it('a turned-in quest advances past both its objective and turn-in at login and on turn-in', () => {
+    expect(get('objective-matching', 'turned-in-quest')).toEqual([6, 6])
+  })
+})
+
 describe('the guide: each kind of step moves on with its own event', () => {
   const trail = () => Object.fromEntries(get('advance', 'trail'))
 

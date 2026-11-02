@@ -475,8 +475,8 @@ if scenario == "independent" or scenario == "independent-absent" then
     load()
     assert(not Env.ns.Guide.state.route)
     -- No guide startup or route lookup is needed. Failed parts must stay irrelevant.
-    Env.ns.Guide.part.Fail("test guide failure")
-    if Env.ns.Navigation then Env.ns.Navigation.part.Fail("test navigation failure") end
+    Env.ns.Guide.part.Call(function() error("test guide failure") end)
+    if Env.ns.Navigation then Env.ns.Navigation.part.Call(function() error("test navigation failure") end) end
     seedUnknown()
     count(UNKNOWN, 1, 1)
     local q = O().quests[UNKNOWN]
